@@ -47,6 +47,7 @@ class SupabaseManager:
         """Establish a PostgreSQL connection."""
         try:
             self.conn = psycopg2.connect(**DB_CONFIG)
+            self.conn.autocommit = True
             logger.info("✅ Connected to PostgreSQL database")
         except Exception as e:
             logger.error(f"❌ Failed to connect to database: {e}")
@@ -168,11 +169,9 @@ class SupabaseManager:
                     buffer
                 )
                 
-            self.conn.commit()
             logger.info(f"✅ Inserted {len(rows)} rows into {table_name}")
                 
         except Exception as e:
-            self.conn.rollback()
             logger.error(f"❌ Error inserting into {table_name}: {e}")
             raise
 
