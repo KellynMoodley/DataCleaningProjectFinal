@@ -345,10 +345,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             <div class="stat-item">
                                 <div class="stat-label">Included</div>
                                 <div class="stat-value" style="color: #27ae60;">${data.counts.included.toLocaleString()}</div>
+                                <div class="stat-value" style="color: #131315ff; font-size: 12px;">${((data.counts.included / data.counts.original) * 100).toFixed(1)}%</div>
                             </div>
                             <div class="stat-item">
                                 <div class="stat-label">Excluded</div>
                                 <div class="stat-value" style="color: #e74c3c;">${data.counts.excluded.toLocaleString()}</div>
+                                <div class="stat-value" style="color: #131315ff; font-size: 12px;">${((data.counts.excluded / data.counts.original) * 100).toFixed(1)}%</div>
                             </div>
                         </div>
                     `;
