@@ -288,6 +288,28 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Download table data
+function downloadTable(tableType, format) {
+    if (!currentSheet) {
+        alert('Please select a sheet first');
+        return;
+    }
+    
+    // Show loading state
+    const statusMessage = document.createElement('div');
+    statusMessage.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #3498db; color: white; padding: 15px 20px; border-radius: 8px; z-index: 9999;';
+    statusMessage.textContent = `Generating ${format.toUpperCase()}... Please wait.`;
+    document.body.appendChild(statusMessage);
+    
+    // Trigger download
+    window.location.href = `/download/${currentSheet}/${tableType}/${format}`;
+    
+    // Remove status message after delay
+    setTimeout(() => {
+        statusMessage.remove();
+    }, 3000);
+}
+
 // Check table status on page load
 document.addEventListener('DOMContentLoaded', function() {
     // Get all sheet keys from the page

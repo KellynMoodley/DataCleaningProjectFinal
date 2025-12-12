@@ -11,7 +11,7 @@ import uuid
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src import DataCleaner, SupabaseManager
+from src import DataCleaner, SupabaseManager, ReportGenerator
 
 # Google Sheets setup
 SERVICE_ACCOUNT_FILE = "service_account.json"
@@ -28,6 +28,7 @@ app = Flask(__name__)
 
 # Initialize Supabase manager
 supabase_manager = None
+report_generator= ReportGenerator
 
 # Sheet configurations
 SHEETS_CONFIG = {
@@ -333,6 +334,39 @@ def check_tables(sheet_key):
         })
     except Exception as e:
         logger.error(f"Error checking tables for {sheet_key}: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+@app.route("/download/<sheet_key>/<table_type>/<format>")
+def download_table(sheet_key, table_type, format):
+    """Download table data as CSV or PDF"""
+    sheet = SHEETS_CONFIG.get(sheet_key)
+    if not sheet:
+        return jsonify({"error": "Invalid sheet key"}), 400
+    
+    if table_type not in ['included', 'excluded', 'original']:
+        return jsonify({"error": "Invalid table type"}), 400
+    
+    if format not in ['csv', 'pdf']:
+        return jsonify({"error": "Invalid format"}), 400
+    
+    try:
+        init_supabase()
+        safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
+        table_name = f"{safe_table_name}_{sheet['identifier']}_{table_type}"
+        
+        # Fetch ALL data (no pagination)
+        with supabase_manager.conn.cursor() as cur:
+            cur.execute(f"SELECT * FROM {table_name} ORDER BY original_row_number ASC")
+            columns = [desc[0] for desc in cur.description]
+            rows = cur.fetchall()
+        
+        if format == 'csv':
+            return report_generator.generate_csv(sheet, table_type, columns, rows)
+        else:
+            return report_generator.generate_pdf(sheet, table_type, columns, rows)
+            
+    except Exception as e:
+        logger.error(f"Error downloading table: {e}")
         return jsonify({"error": str(e)}), 500
 
 

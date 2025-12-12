@@ -398,6 +398,15 @@
             <div id="included-section" class="table-section">
                 <div class="table-header">
                     <h2>Included Data (Valid Records)</h2>
+                    <div class="export-buttons" style="display: flex; gap: 10px;">
+                        <button onclick="downloadTable('included', 'csv')" style="background-color: #27ae60; min-width: auto; padding: 8px 16px;">
+                            📥 Download CSV
+                        </button>
+                        <button onclick="downloadTable('included', 'pdf')" style="background-color: #e74c3c; min-width: auto; padding: 8px 16px;">
+                            📄 Download PDF
+                        </button>
+                    </div>
+
                     <div class="table-controls">
                         <select id="included-per-page" onchange="changePerPage('included')">
                             <option value="50">50 per page</option>
@@ -419,6 +428,15 @@
             <div id="excluded-section" class="table-section">
                 <div class="table-header">
                     <h2>Excluded Data (Invalid Records)</h2>
+                    <div class="export-buttons" style="display: flex; gap: 10px;">
+                        <button onclick="downloadTable('excluded', 'csv')" style="background-color: #27ae60; min-width: auto; padding: 8px 16px;">
+                            📥 Download CSV
+                        </button>
+                        <button onclick="downloadTable('excluded', 'pdf')" style="background-color: #e74c3c; min-width: auto; padding: 8px 16px;">
+                            📄 Download PDF
+                        </button>
+                    </div>
+                    
                     <div class="table-controls">
                         <select id="excluded-per-page" onchange="changePerPage('excluded')">
                             <option value="50">50 per page</option>
