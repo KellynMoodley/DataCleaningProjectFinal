@@ -1,10 +1,11 @@
 from flask import send_file
 import csv
 import io
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import letter, A4, landscape
 from reportlab.lib import colors
-from reportlab.lib.units import inch
+from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime
 
@@ -40,9 +41,14 @@ class ReportGenerator:
 
 
     def generate_pdf(sheet, table_type, columns, rows):
-        """Generate PDF file"""
+        """Generate PDF file with proper text wrapping, special character support, and formatting"""
+        from html import escape
+        
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        # Use landscape orientation with smaller margins for more space
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), 
+                            leftMargin=5*mm, rightMargin=5*mm,
+                            topMargin=5*mm, bottomMargin=5*mm)
         elements = []
         
         # Styles
@@ -58,58 +64,117 @@ class ReportGenerator:
         
         title_para = Paragraph(f"<b>{title}</b>", styles['Title'])
         elements.append(title_para)
-        elements.append(Spacer(1, 0.3*inch))
+        elements.append(Spacer(1, 5*mm))
         
         # Metadata
         date_para = Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal'])
         elements.append(date_para)
         count_para = Paragraph(f"Total Records: {len(rows):,}", styles['Normal'])
         elements.append(count_para)
-        elements.append(Spacer(1, 0.3*inch))
+        elements.append(Spacer(1, 5*mm))
         
         # Limit rows for PDF (too many rows = huge file)
         max_rows = 1000
+        original_row_count = len(rows)
         if len(rows) > max_rows:
             rows = rows[:max_rows]
-            note = Paragraph(f"<i>Note: Showing first {max_rows:,} of {len(rows):,} records. Download CSV for complete data.</i>", styles['Normal'])
+            note = Paragraph(f"<i>Note: Showing first {max_rows:,} of {original_row_count:,} records. Download CSV for complete data.</i>", styles['Normal'])
             elements.append(note)
-            elements.append(Spacer(1, 0.2*inch))
+            elements.append(Spacer(1, 5*mm))
         
-        # Table data
-        table_data = [columns]  # Header row
+        # Create custom styles for table cells with larger fonts
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=10,
+            wordWrap='CJK',
+            alignment=0  # Left align
+        )
+        
+        header_style = ParagraphStyle(
+            'HeaderStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            leading=11,
+            fontName='Helvetica-Bold',
+            textColor=colors.whitesmoke,
+            wordWrap='CJK',
+            alignment=0
+        )
+        
+        # Shorten column headers if they're too long
+        shortened_columns = []
+        for col in columns:
+            if len(col) > 20:
+                # Truncate long column names
+                shortened_columns.append(col[:17] + '...')
+            else:
+                shortened_columns.append(col)
+        
+        # Prepare table data with Paragraph objects for text wrapping
+        table_data = []
+        
+        # Header row with wrapping
+        header_row = [Paragraph(f"<b>{escape(str(col))}</b>", header_style) for col in shortened_columns]
+        table_data.append(header_row)
+        
+        # Data rows with wrapping and special character support
         for row in rows:
-            # Convert all values to strings and truncate long text
             row_data = []
             for val in row:
                 if val is None:
-                    row_data.append('')
+                    row_data.append(Paragraph('', cell_style))
                 else:
                     val_str = str(val)
-                    # Truncate long values
-                    if len(val_str) > 50:
-                        val_str = val_str[:47] + '...'
-                    row_data.append(val_str)
+                    # Truncate extremely long values
+                    if len(val_str) > 150:
+                        val_str = val_str[:147] + '...'
+                    # Escape HTML special characters but preserve unicode
+                    val_str = escape(val_str)
+                    row_data.append(Paragraph(val_str, cell_style))
             table_data.append(row_data)
         
-        # Create table
-        # Adjust column widths based on number of columns
+        # Calculate available width 
+        available_width = 350*mm - 10*mm
         num_cols = len(columns)
-        col_width = 7.5 * inch / num_cols  # Fit within page width
         
-        pdf_table = Table(table_data, colWidths=[col_width] * num_cols)
+        # Smart column width calculation
+        if num_cols <= 5:
+            col_width = available_width / num_cols
+            col_widths = [col_width] * num_cols
+        else:
+            # For many columns, set minimum width
+            min_col_width =  25*mm  
+            if num_cols * min_col_width <= available_width:
+                col_width = available_width / num_cols
+                col_widths = [col_width] * num_cols
+            else:
+                # Use minimum width, table will be wide
+                col_widths = [min_col_width] * num_cols
         
-        # Style table
+        # Create table
+        pdf_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        
+        # Style table with larger padding
         pdf_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            # Header styling
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#404040')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            # Alternating row colors for readability
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+            # Grid
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
         ]))
         
         elements.append(pdf_table)
