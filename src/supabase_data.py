@@ -283,3 +283,60 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Error counting records in {table_name}: {e}")
             return 0
+        
+        
+    def check_tables_exist(self, table_name: str, sheet_identifier: str) -> Dict[str, Any]:
+        """Check if tables exist and return row counts"""
+        try:
+            safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+            included_table = f"{safe_table_name}_{sheet_identifier}_included"
+            excluded_table = f"{safe_table_name}_{sheet_identifier}_excluded"
+            original_table = f"{safe_table_name}_{sheet_identifier}_original"
+        
+            result = {
+                'exists': False,
+                'counts': {
+                    'original': 0,
+                    'included': 0,
+                    'excluded': 0
+                }
+            }
+        
+            # Check if tables exist and get counts
+            with self.conn.cursor() as cur:
+                # Check included table
+                cur.execute(f"""
+                    SELECT COUNT(*) FROM information_schema.tables 
+                    WHERE table_name = '{included_table}'
+                """)
+                
+                if cur.fetchone()[0] > 0:
+                    cur.execute(f"SELECT COUNT(*) FROM {included_table}")
+                    result['counts']['included'] = cur.fetchone()[0]
+                    result['exists'] = True
+            
+                # Check excluded table
+                cur.execute(f"""
+                    SELECT COUNT(*) FROM information_schema.tables 
+                    WHERE table_name = '{excluded_table}'
+                """)
+                
+                if cur.fetchone()[0] > 0:
+                    cur.execute(f"SELECT COUNT(*) FROM {excluded_table}")
+                    result['counts']['excluded'] = cur.fetchone()[0]
+            
+                # Check original table
+                cur.execute(f"""
+                    SELECT COUNT(*) FROM information_schema.tables 
+                    WHERE table_name = '{original_table}'
+                """)
+                
+                if cur.fetchone()[0] > 0:
+                    cur.execute(f"SELECT COUNT(*) FROM {original_table}")
+                    result['counts']['original'] = cur.fetchone()[0]
+        
+            return result
+        
+        except Exception as e:
+            logger.error(f"Error checking tables: {e}")
+            return {'exists': False, 'counts': {'original': 0, 'included': 0, 'excluded': 0}}

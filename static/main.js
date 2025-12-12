@@ -64,8 +64,10 @@ function processSheet(sheetKey) {
         
         // Enable view button
         viewBtn.disabled = false;
-        processBtn.disabled = false;
-        processBtn.textContent = '🔄 Process Sheet';
+        // Inside processSheet() function, in the success handler after viewBtn.disabled = false;
+        processBtn.disabled = true;
+        processBtn.textContent = '✅ Already Processed';
+        processBtn.style.backgroundColor = '#95a5a6';
         
         // Store current sheet
         currentSheet = sheetKey;
@@ -285,3 +287,53 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Check table status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Get all sheet keys from the page
+    const sheetCards = document.querySelectorAll('.sheet-card');
+    
+    sheetCards.forEach(card => {
+        const processBtn = card.querySelector('.btn-process');
+        const viewBtn = card.querySelector('.btn-view');
+        const sheetKey = processBtn.getAttribute('onclick').match(/'([^']+)'/)[1];
+        
+        // Check if tables exist for this sheet
+        fetch(`/check_tables/${sheetKey}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.exists) {
+                    // Tables exist - disable process, enable view
+                    processBtn.disabled = true;
+                    processBtn.textContent = '✅ Already Processed';
+                    processBtn.style.backgroundColor = '#95a5a6';
+                    
+                    viewBtn.disabled = false;
+                    
+                    // Show row counts in status
+                    const statusBox = document.getElementById(`status-${sheetKey}`);
+                    statusBox.className = 'status-box show success';
+                    statusBox.innerHTML = `
+                        <p><strong>✅ Data Already Processed</strong></p>
+                        <div class="stats">
+                            <div class="stat-item">
+                                <div class="stat-label">Total Rows</div>
+                                <div class="stat-value">${data.counts.original.toLocaleString()}</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Included</div>
+                                <div class="stat-value" style="color: #27ae60;">${data.counts.included.toLocaleString()}</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Excluded</div>
+                                <div class="stat-value" style="color: #e74c3c;">${data.counts.excluded.toLocaleString()}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            })
+            .catch(err => {
+                console.error(`Error checking tables for ${sheetKey}:`, err);
+            });
+    });
+});

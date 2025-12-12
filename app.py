@@ -314,6 +314,26 @@ def get_table_data(sheet_key, table_type):
     except Exception as e:
         logger.error(f"Error getting table data: {e}")
         return jsonify({"error": str(e)}), 500
+    
+@app.route("/check_tables/<sheet_key>")
+def check_tables(sheet_key):
+    """Check if tables exist for a sheet"""
+    sheet = SHEETS_CONFIG.get(sheet_key)
+    if not sheet:
+        return jsonify({"error": "Invalid sheet key"}), 400
+    
+    try:
+        init_supabase()
+        result = supabase_manager.check_tables_exist('clients_2025', sheet['identifier'])
+        return jsonify({
+            "success": True,
+            "sheet_key": sheet_key,
+            "exists": result['exists'],
+            "counts": result['counts']
+        })
+    except Exception as e:
+        logger.error(f"Error checking tables for {sheet_key}: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
