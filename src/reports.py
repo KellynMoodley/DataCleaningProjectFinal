@@ -82,6 +82,21 @@ class ReportGenerator:
             elements.append(note)
             elements.append(Spacer(1, 5*mm))
         
+        # Define columns to exclude
+        exclude_columns = ['id', 'created_at']
+        
+        # Filter columns - keep all except excluded ones
+        filtered_columns = [col for col in columns if col not in exclude_columns]
+        
+        # Get indices of filtered columns in original columns list
+        column_indices = [columns.index(col) for col in filtered_columns]
+        
+        # Filter rows to only include selected columns
+        filtered_rows = []
+        for row in rows:
+            filtered_row = [row[i] for i in column_indices]
+            filtered_rows.append(filtered_row)
+        
         # Create custom styles for table cells with larger fonts
         cell_style = ParagraphStyle(
             'CellStyle',
@@ -105,7 +120,7 @@ class ReportGenerator:
         
         # Shorten column headers if they're too long
         shortened_columns = []
-        for col in columns:
+        for col in filtered_columns:
             if len(col) > 20:
                 # Truncate long column names
                 shortened_columns.append(col[:17] + '...')
@@ -120,7 +135,7 @@ class ReportGenerator:
         table_data.append(header_row)
         
         # Data rows with wrapping and special character support
-        for row in rows:
+        for row in filtered_rows:
             row_data = []
             for val in row:
                 if val is None:
@@ -136,8 +151,8 @@ class ReportGenerator:
             table_data.append(row_data)
         
         # Calculate available width 
-        available_width = 350*mm - 10*mm
-        num_cols = len(columns)
+        available_width = 280*mm - 10*mm
+        num_cols = len(filtered_columns)
         
         # Smart column width calculation
         if num_cols <= 5:
@@ -145,7 +160,7 @@ class ReportGenerator:
             col_widths = [col_width] * num_cols
         else:
             # For many columns, set minimum width
-            min_col_width =  25*mm  
+            min_col_width = 25*mm  
             if num_cols * min_col_width <= available_width:
                 col_width = available_width / num_cols
                 col_widths = [col_width] * num_cols
