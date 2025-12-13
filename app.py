@@ -375,12 +375,14 @@ def create_analytics(sheet_key):
         
         logger.info(f"Creating analytics for sheet: {sheet_key}")
         
-        # Initialize analytics
         analytics = DataAnalytics(DB_CONFIG)
         analytics.connect()
         
         try:
-            # Create all analytics tables
+            # Create indexes FIRST (before creating views)
+            analytics.create_duplicate_indexes('clients_2025', sheet['identifier'])
+            
+            # Create analytics tables
             analytics.create_analytics_table('clients_2025', sheet['identifier'])
             analytics.create_duplicate_groups_view('clients_2025', sheet['identifier'])
             analytics.create_visualization_tables('clients_2025', sheet['identifier'])
@@ -447,7 +449,7 @@ def get_duplicate_groups(sheet_key, group_type):
         per_page = int(request.args.get('per_page', 50))
         
         # Validate group_type
-        if group_type not in ['name_year', 'name_month', 'name_day']:
+        if group_type not in ['name_year', 'name_month', 'name_day', 'year_month', 'year_day', 'month_day']:
             return jsonify({'error': 'Invalid group type'}), 400
         
         logger.info(f"Getting {group_type} duplicates for sheet: {sheet_key}")
@@ -515,6 +517,7 @@ def get_chart_data(sheet_key, chart_type):
     except Exception as e:
         logger.error(f"Error getting chart data: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 
 if __name__ == '__main__':

@@ -382,6 +382,83 @@ class DataAnalytics:
         """
         self.execute_sql(create_view_query)
         logger.info(f"✅ Created duplicate group view: {view_name_day}")
+        
+        # ==================== ADD THESE THREE NEW VIEWS ====================
+        
+        # Create view for year + month duplicates
+        view_year_month = f"{safe_table_name}_{sheet_identifier}_duplicates_year_month"
+        self.execute_sql(f"DROP VIEW IF EXISTS {view_year_month}")
+        
+        create_view_query = f"""
+        CREATE VIEW {view_year_month} AS
+        SELECT 
+            birthyear,
+            birthmonth,
+            COUNT(*) as duplicate_count,
+            ARRAY_AGG(row_id::text ORDER BY original_row_number) as row_ids,
+            ARRAY_AGG(original_row_number ORDER BY original_row_number) as original_row_numbers,
+            ARRAY_AGG(firstname ORDER BY original_row_number) as firstnames,
+            ARRAY_AGG(birthday ORDER BY original_row_number) as birthdays
+        FROM {original_table}
+        WHERE status = 'included'
+        AND birthyear IS NOT NULL
+        AND birthmonth IS NOT NULL
+        GROUP BY birthyear, birthmonth
+        HAVING COUNT(*) > 1
+        ORDER BY duplicate_count DESC, birthyear, birthmonth;
+        """
+        self.execute_sql(create_view_query)
+        logger.info(f"✅ Created duplicate group view: {view_year_month}")
+        
+        # Create view for year + day duplicates
+        view_year_day = f"{safe_table_name}_{sheet_identifier}_duplicates_year_day"
+        self.execute_sql(f"DROP VIEW IF EXISTS {view_year_day}")
+        
+        create_view_query = f"""
+        CREATE VIEW {view_year_day} AS
+        SELECT 
+            birthyear,
+            birthday,
+            COUNT(*) as duplicate_count,
+            ARRAY_AGG(row_id::text ORDER BY original_row_number) as row_ids,
+            ARRAY_AGG(original_row_number ORDER BY original_row_number) as original_row_numbers,
+            ARRAY_AGG(firstname ORDER BY original_row_number) as firstnames,
+            ARRAY_AGG(birthmonth ORDER BY original_row_number) as birthmonths
+        FROM {original_table}
+        WHERE status = 'included'
+        AND birthyear IS NOT NULL
+        AND birthday IS NOT NULL
+        GROUP BY birthyear, birthday
+        HAVING COUNT(*) > 1
+        ORDER BY duplicate_count DESC, birthyear, birthday;
+        """
+        self.execute_sql(create_view_query)
+        logger.info(f"✅ Created duplicate group view: {view_year_day}")
+        
+        # Create view for month + day duplicates
+        view_month_day = f"{safe_table_name}_{sheet_identifier}_duplicates_month_day"
+        self.execute_sql(f"DROP VIEW IF EXISTS {view_month_day}")
+        
+        create_view_query = f"""
+        CREATE VIEW {view_month_day} AS
+        SELECT 
+            birthmonth,
+            birthday,
+            COUNT(*) as duplicate_count,
+            ARRAY_AGG(row_id::text ORDER BY original_row_number) as row_ids,
+            ARRAY_AGG(original_row_number ORDER BY original_row_number) as original_row_numbers,
+            ARRAY_AGG(firstname ORDER BY original_row_number) as firstnames,
+            ARRAY_AGG(birthyear ORDER BY original_row_number) as birthyears
+        FROM {original_table}
+        WHERE status = 'included'
+        AND birthmonth IS NOT NULL
+        AND birthday IS NOT NULL
+        GROUP BY birthmonth, birthday
+        HAVING COUNT(*) > 1
+        ORDER BY duplicate_count DESC, birthmonth, birthday;
+        """
+        self.execute_sql(create_view_query)
+        logger.info(f"✅ Created duplicate group view: {view_month_day}")
 
 
     def create_visualization_tables(self, table_name: str, sheet_identifier: str):
@@ -474,14 +551,19 @@ class DataAnalytics:
         """Retrieve duplicate group data with pagination"""
         safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
         
-        if group_type == 'name_year':
-            view_name = f"{safe_table_name}_{sheet_identifier}_duplicates_name_year"
-        elif group_type == 'name_month':
-            view_name = f"{safe_table_name}_{sheet_identifier}_duplicates_name_month"
-        elif group_type == 'name_day':
-            view_name = f"{safe_table_name}_{sheet_identifier}_duplicates_name_day"
-        else:
+        valid_types = {
+            'name_year': f"{safe_table_name}_{sheet_identifier}_duplicates_name_year",
+            'name_month': f"{safe_table_name}_{sheet_identifier}_duplicates_name_month",
+            'name_day': f"{safe_table_name}_{sheet_identifier}_duplicates_name_day",
+            'year_month': f"{safe_table_name}_{sheet_identifier}_duplicates_year_month",
+            'year_day': f"{safe_table_name}_{sheet_identifier}_duplicates_year_day",
+            'month_day': f"{safe_table_name}_{sheet_identifier}_duplicates_month_day"
+        }
+        
+        if group_type not in valid_types:
             raise ValueError(f"Invalid group type: {group_type}")
+        
+        view_name = valid_types[group_type]
         
         try:
             offset = (page - 1) * per_page
@@ -503,3 +585,32 @@ class DataAnalytics:
         except Exception as e:
             logger.error(f"❌ Error retrieving duplicate groups: {e}")
             raise
+
+    def create_duplicate_indexes(self, table_name: str, sheet_identifier: str):
+        """Create indexes on duplicate search columns for faster queries"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        original_table = f"{safe_table_name}_{sheet_identifier}_original"
+        
+        logger.info(f"Creating indexes on {original_table}...")
+        
+        # Composite indexes for duplicate detection
+        indexes = [
+            f"CREATE INDEX IF NOT EXISTS idx_{original_table}_name_year ON {original_table}(firstname, birthyear) WHERE status = 'included'",
+            f"CREATE INDEX IF NOT EXISTS idx_{original_table}_name_month ON {original_table}(firstname, birthmonth) WHERE status = 'included'",
+            f"CREATE INDEX IF NOT EXISTS idx_{original_table}_name_day ON {original_table}(firstname, birthday) WHERE status = 'included'",
+            f"CREATE INDEX IF NOT EXISTS idx_{original_table}_year_month ON {original_table}(birthyear, birthmonth) WHERE status = 'included'",
+            f"CREATE INDEX IF NOT EXISTS idx_{original_table}_year_day ON {original_table}(birthyear, birthday) WHERE status = 'included'",
+            f"CREATE INDEX IF NOT EXISTS idx_{original_table}_month_day ON {original_table}(birthmonth, birthday) WHERE status = 'included'",
+            # Single column indexes for sorting
+            f"CREATE INDEX IF NOT EXISTS idx_{original_table}_original_row ON {original_table}(original_row_number)",
+            f"CREATE INDEX IF NOT EXISTS idx_{original_table}_status ON {original_table}(status)"
+        ]
+        
+        for idx_query in indexes:
+            try:
+                self.execute_sql(idx_query)
+                logger.info(f"✅ Index created")
+            except Exception as e:
+                logger.warning(f"Index creation skipped or failed: {e}")
+        
+        logger.info(f"✅ All indexes created successfully")

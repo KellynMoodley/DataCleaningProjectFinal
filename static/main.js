@@ -134,6 +134,8 @@ function switchTab(tableType) {
             loadDuplicates('name_year');
         } else if (tableType === 'charts') {
             loadChart('birthyear');
+        }else if (tableType === 'common_names') {
+            loadChart('birthyear');
         }
     }
 }
@@ -538,6 +540,12 @@ function renderDuplicates(duplicates, groupType) {
             label = `${escapeHtml(dup.firstname)} - Month ${dup.birthmonth}`;
         } else if (groupType === 'name_day') {
             label = `${escapeHtml(dup.firstname)} - Day ${dup.birthday}`;
+        } else if (groupType === 'year_month') {
+            label = `${dup.birthyear} - Month ${dup.birthmonth}`;
+        } else if (groupType === 'year_day') {
+            label = `${dup.birthyear} - Day ${dup.birthday}`;
+        } else if (groupType === 'month_day') {
+            label = `Month ${dup.birthmonth} - Day ${dup.birthday}`;
         }
         
         html += `

@@ -376,6 +376,7 @@
                 <button class="tab" onclick="switchTab('summary_stats')">📊 Summary Statistics</button>
                 <button class="tab" onclick="switchTab('duplicates')">🔍 Duplicate Analysis</button>
                 <button class="tab" onclick="switchTab('charts')">📈 Charts</button>
+                <button class="tab" onclick="switchTab('common_names')">Top 80% Most Common Names</button>
             </div>
 
             <!-- Original Data Section -->
@@ -489,6 +490,9 @@
                         <button class="tab active" onclick="loadDuplicates('name_year')">Name + Year</button>
                         <button class="tab" onclick="loadDuplicates('name_month')">Name + Month</button>
                         <button class="tab" onclick="loadDuplicates('name_day')">Name + Day</button>
+                        <button class="tab" onclick="loadDuplicates('year_month')">Year + Month</button>
+                        <button class="tab" onclick="loadDuplicates('year_day')">Year + Day</button>
+                        <button class="tab" onclick="loadDuplicates('month_day')">Month + Day</button>
                     </div>
                     <div id="duplicates-container" style="margin-top: 20px;">
                         <div class="loading">
