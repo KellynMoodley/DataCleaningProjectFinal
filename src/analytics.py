@@ -310,10 +310,10 @@ class DataAnalytics:
         
         # Create view for name + year duplicates
         view_name_year = f"{safe_table_name}_{sheet_identifier}_duplicates_name_year"
-        self.execute_sql(f"DROP VIEW IF EXISTS {view_name_year}")
+        self.execute_sql(f"DROP TABLE IF EXISTS {view_name_year}")
         
         create_view_query = f"""
-        CREATE VIEW {view_name_year} AS
+        CREATE TABLE {view_name_year} AS
         SELECT 
             firstname,
             birthyear,
@@ -335,10 +335,10 @@ class DataAnalytics:
         
         # Create view for name + month duplicates
         view_name_month = f"{safe_table_name}_{sheet_identifier}_duplicates_name_month"
-        self.execute_sql(f"DROP VIEW IF EXISTS {view_name_month}")
+        self.execute_sql(f"DROP TABLE IF EXISTS {view_name_month}")
         
         create_view_query = f"""
-        CREATE VIEW {view_name_month} AS
+        CREATE TABLE {view_name_month} AS
         SELECT 
             firstname,
             birthmonth,
@@ -360,10 +360,10 @@ class DataAnalytics:
         
         # Create view for name + day duplicates
         view_name_day = f"{safe_table_name}_{sheet_identifier}_duplicates_name_day"
-        self.execute_sql(f"DROP VIEW IF EXISTS {view_name_day}")
+        self.execute_sql(f"DROP TABLE IF EXISTS {view_name_day}")
         
         create_view_query = f"""
-        CREATE VIEW {view_name_day} AS
+        CREATE TABLE {view_name_day} AS
         SELECT 
             firstname,
             birthday,
@@ -387,10 +387,10 @@ class DataAnalytics:
         
         # Create view for year + month duplicates
         view_year_month = f"{safe_table_name}_{sheet_identifier}_duplicates_year_month"
-        self.execute_sql(f"DROP VIEW IF EXISTS {view_year_month}")
+        self.execute_sql(f"DROP TABLE IF EXISTS {view_year_month}")
         
         create_view_query = f"""
-        CREATE VIEW {view_year_month} AS
+        CREATE TABLE {view_year_month} AS
         SELECT 
             birthyear,
             birthmonth,
@@ -412,10 +412,10 @@ class DataAnalytics:
         
         # Create view for year + day duplicates
         view_year_day = f"{safe_table_name}_{sheet_identifier}_duplicates_year_day"
-        self.execute_sql(f"DROP VIEW IF EXISTS {view_year_day}")
+        self.execute_sql(f"DROP TABLE IF EXISTS {view_year_day}")
         
         create_view_query = f"""
-        CREATE VIEW {view_year_day} AS
+        CREATE TABLE {view_year_day} AS
         SELECT 
             birthyear,
             birthday,
@@ -437,10 +437,10 @@ class DataAnalytics:
         
         # Create view for month + day duplicates
         view_month_day = f"{safe_table_name}_{sheet_identifier}_duplicates_month_day"
-        self.execute_sql(f"DROP VIEW IF EXISTS {view_month_day}")
+        self.execute_sql(f"DROP TABLE IF EXISTS {view_month_day}")
         
         create_view_query = f"""
-        CREATE VIEW {view_month_day} AS
+        CREATE TABLE {view_month_day} AS
         SELECT 
             birthmonth,
             birthday,
@@ -457,6 +457,7 @@ class DataAnalytics:
         HAVING COUNT(*) > 1
         ORDER BY duplicate_count DESC, birthmonth, birthday;
         """
+        
         self.execute_sql(create_view_query)
         logger.info(f"✅ Created duplicate group view: {view_month_day}")
 
@@ -587,13 +588,12 @@ class DataAnalytics:
             raise
 
     def create_duplicate_indexes(self, table_name: str, sheet_identifier: str):
-        """Create indexes on duplicate search columns for faster queries"""
+        """Create indexes on ORIGINAL table for faster duplicate detection"""
         safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
         original_table = f"{safe_table_name}_{sheet_identifier}_original"
         
         logger.info(f"Creating indexes on {original_table}...")
         
-        # Composite indexes for duplicate detection
         indexes = [
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_name_year ON {original_table}(firstname, birthyear) WHERE status = 'included'",
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_name_month ON {original_table}(firstname, birthmonth) WHERE status = 'included'",
@@ -601,7 +601,6 @@ class DataAnalytics:
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_year_month ON {original_table}(birthyear, birthmonth) WHERE status = 'included'",
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_year_day ON {original_table}(birthyear, birthday) WHERE status = 'included'",
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_month_day ON {original_table}(birthmonth, birthday) WHERE status = 'included'",
-            # Single column indexes for sorting
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_original_row ON {original_table}(original_row_number)",
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_status ON {original_table}(status)"
         ]
@@ -613,7 +612,32 @@ class DataAnalytics:
             except Exception as e:
                 logger.warning(f"Index creation skipped or failed: {e}")
         
-        logger.info(f"✅ All indexes created successfully")
+        logger.info(f"✅ All original table indexes created successfully")
+
+
+    def create_duplicate_table_indexes(self, table_name: str, sheet_identifier: str):
+        """Create indexes ON duplicate tables for fast queries"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        
+        logger.info("Creating indexes on duplicate tables...")
+        
+        indexes = [
+            f"CREATE INDEX IF NOT EXISTS idx_{safe_table_name}_{sheet_identifier}_duplicates_name_year_count ON {safe_table_name}_{sheet_identifier}_duplicates_name_year(duplicate_count DESC)",
+            f"CREATE INDEX IF NOT EXISTS idx_{safe_table_name}_{sheet_identifier}_duplicates_name_month_count ON {safe_table_name}_{sheet_identifier}_duplicates_name_month(duplicate_count DESC)",
+            f"CREATE INDEX IF NOT EXISTS idx_{safe_table_name}_{sheet_identifier}_duplicates_name_day_count ON {safe_table_name}_{sheet_identifier}_duplicates_name_day(duplicate_count DESC)",
+            f"CREATE INDEX IF NOT EXISTS idx_{safe_table_name}_{sheet_identifier}_duplicates_year_month_count ON {safe_table_name}_{sheet_identifier}_duplicates_year_month(duplicate_count DESC)",
+            f"CREATE INDEX IF NOT EXISTS idx_{safe_table_name}_{sheet_identifier}_duplicates_year_day_count ON {safe_table_name}_{sheet_identifier}_duplicates_year_day(duplicate_count DESC)",
+            f"CREATE INDEX IF NOT EXISTS idx_{safe_table_name}_{sheet_identifier}_duplicates_month_day_count ON {safe_table_name}_{sheet_identifier}_duplicates_month_day(duplicate_count DESC)"
+        ]
+        
+        for idx_query in indexes:
+            try:
+                self.execute_sql(idx_query)
+                logger.info(f"✅ Index created")
+            except Exception as e:
+                logger.warning(f"Index creation failed: {e}")
+        
+        logger.info(f"✅ All duplicate table indexes created successfully")
         
         
     def create_common_names_table(self, table_name: str, sheet_identifier: str):

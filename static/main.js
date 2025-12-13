@@ -136,6 +136,8 @@ function switchTab(tableType) {
             loadChart('birthyear');
         }else if (tableType === 'common_names') {
             loadCommonNames();
+        }else if (tableType === 'comparison') {
+            loadComparisonSummary();
         }
     }
 }
@@ -852,7 +854,430 @@ function downloadCommonNames(format) {
     }, 3000);
 }
 
-// Check table status on page load
+
+// Add this state object near the top with other global states
+let currentComparisonState = {
+    view: 'summary',  // 'summary', 'common_names', 'unique_jan', 'unique_apr'
+    page: 1,
+    perPage: 50,
+    filterTop80: null,
+    top80Only: false
+};
+
+// Add this function with other load functions
+function loadComparison() {
+    const container = document.getElementById('comparison-container');
+    
+    // Show loading
+    container.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Click "Load Comparison" to generate comparison analytics...</p>
+        </div>
+    `;
+}
+
+function loadComparisonAnalytics() {
+    const loadBtn = event.target;
+    loadBtn.disabled = true;
+    loadBtn.textContent = '⏳ Creating Comparison...';
+    
+    fetch('/comparison/create', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || 'Failed to create comparison analytics');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Success - update button
+        loadBtn.textContent = '✅ Comparison Ready';
+        loadBtn.style.backgroundColor = '#95a5a6';
+        
+        // Load the comparison data
+        loadComparisonSummary();
+    })
+    .catch(error => {
+        console.error('Error creating comparison:', error);
+        alert('Failed to create comparison analytics. Please ensure both JAN and APR sheets are processed first.');
+        loadBtn.disabled = false;
+        loadBtn.textContent = '📥 Load Comparison';
+    });
+}
+
+function loadComparisonSummary() {
+    const container = document.getElementById('comparison-container');
+    
+    // Show loading
+    container.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading comparison summary...</p>
+        </div>
+    `;
+    
+    fetch('/comparison/summary')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
+                return;
+            }
+            
+            renderComparisonSummary(data);
+        })
+        .catch(error => {
+            console.error('Error loading comparison summary:', error);
+            container.innerHTML = `<p style="color: #e74c3c;">Failed to load comparison summary</p>`;
+        });
+}
+
+function renderComparisonSummary(summary) {
+    const container = document.getElementById('comparison-container');
+    
+    let html = `
+        <div style="padding: 20px;">
+            <h3 style="color: #2c3e50; margin-bottom: 20px;">📊 Dataset Overview</h3>
+            
+            <div class="stats" style="margin-bottom: 30px;">
+                <div class="stat-item">
+                    <div class="stat-label">JAN Total Records</div>
+                    <div class="stat-value">${(summary.jan_total_records || 0).toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">JAN Unique Names</div>
+                    <div class="stat-value">${(summary.jan_unique_names || 0).toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">JAN Top 80% Names</div>
+                    <div class="stat-value">${(summary.jan_top80_count || 0).toLocaleString()}</div>
+                </div>
+            </div>
+            
+            <div class="stats" style="margin-bottom: 30px;">
+                <div class="stat-item">
+                    <div class="stat-label">APR Total Records</div>
+                    <div class="stat-value">${(summary.apr_total_records || 0).toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">APR Unique Names</div>
+                    <div class="stat-value">${(summary.apr_unique_names || 0).toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">APR Top 80% Names</div>
+                    <div class="stat-value">${(summary.apr_top80_count || 0).toLocaleString()}</div>
+                </div>
+            </div>
+            
+            <h3 style="color: #2c3e50; margin-bottom: 20px;">🔍 Comparison Results</h3>
+            
+            <div class="stats" style="margin-bottom: 30px;">
+                <div class="stat-item">
+                    <div class="stat-label">Common Names</div>
+                    <div class="stat-value" style="color: #3498db;">${(summary.common_names_count || 0).toLocaleString()}</div>
+                    <div style="font-size: 0.85rem; color: #7f8c8d; margin-top: 4px;">
+                        ${(summary.common_names_pct_of_jan || 0)}% of JAN, ${(summary.common_names_pct_of_apr || 0)}% of APR
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Unique to JAN</div>
+                    <div class="stat-value" style="color: #e74c3c;">${(summary.unique_jan_names_count || 0).toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Unique to APR</div>
+                    <div class="stat-value" style="color: #f39c12;">${(summary.unique_apr_names_count || 0).toLocaleString()}</div>
+                </div>
+            </div>
+            
+            <h3 style="color: #2c3e50; margin-bottom: 20px;">🏆 Top 80% Overlap Analysis</h3>
+            
+            <div class="stats" style="margin-bottom: 30px;">
+                <div class="stat-item">
+                    <div class="stat-label">JAN Top 80% in APR</div>
+                    <div class="stat-value">${(summary.jan_top80_in_apr_count || 0).toLocaleString()}</div>
+                    <div style="font-size: 0.85rem; color: #7f8c8d; margin-top: 4px;">
+                        ${(summary.jan_top80_in_apr_pct || 0)}% of JAN's top 80%
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">APR Top 80% in JAN</div>
+                    <div class="stat-value">${(summary.apr_top80_in_jan_count || 0).toLocaleString()}</div>
+                    <div style="font-size: 0.85rem; color: #7f8c8d; margin-top: 4px;">
+                        ${(summary.apr_top80_in_jan_pct || 0)}% of APR's top 80%
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">In Both Top 80%</div>
+                    <div class="stat-value" style="color: #27ae60;">${(summary.both_top80_count || 0).toLocaleString()}</div>
+                </div>
+            </div>
+            
+            <h3 style="color: #2c3e50; margin-bottom: 20px;">📋 Detailed Views</h3>
+            
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button onclick="loadComparisonCommonNames()" style="background-color: #3498db; padding: 10px 20px; border: none; color: white; border-radius: 6px; cursor: pointer;">
+                    📄 View Common Names
+                </button>
+                <button onclick="loadComparisonUniqueJan()" style="background-color: #e74c3c; padding: 10px 20px; border: none; color: white; border-radius: 6px; cursor: pointer;">
+                    📄 View Unique to JAN
+                </button>
+                <button onclick="loadComparisonUniqueApr()" style="background-color: #f39c12; padding: 10px 20px; border: none; color: white; border-radius: 6px; cursor: pointer;">
+                    📄 View Unique to APR
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function loadComparisonCommonNames() {
+    currentComparisonState.view = 'common_names';
+    currentComparisonState.page = 1;
+    fetchComparisonData();
+}
+
+function loadComparisonUniqueJan() {
+    currentComparisonState.view = 'unique_jan';
+    currentComparisonState.page = 1;
+    fetchComparisonData();
+}
+
+function loadComparisonUniqueApr() {
+    currentComparisonState.view = 'unique_apr';
+    currentComparisonState.page = 1;
+    fetchComparisonData();
+}
+
+function fetchComparisonData() {
+    const container = document.getElementById('comparison-container');
+    const { view, page, perPage, filterTop80, top80Only } = currentComparisonState;
+    
+    container.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading data...</p>
+        </div>
+    `;
+    
+    let url = '';
+    if (view === 'common_names') {
+        url = `/comparison/common_names?page=${page}&per_page=${perPage}`;
+        if (filterTop80) url += `&filter_top80=${filterTop80}`;
+    } else if (view === 'unique_jan') {
+        url = `/comparison/unique_jan?page=${page}&per_page=${perPage}&top80_only=${top80Only}`;
+    } else if (view === 'unique_apr') {
+        url = `/comparison/unique_apr?page=${page}&per_page=${perPage}&top80_only=${top80Only}`;
+    }
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
+                return;
+            }
+            
+            renderComparisonTable(data);
+        })
+        .catch(error => {
+            console.error('Error loading comparison data:', error);
+            container.innerHTML = `<p style="color: #e74c3c;">Failed to load data</p>`;
+        });
+}
+
+function renderComparisonTable(data) {
+    const container = document.getElementById('comparison-container');
+    const { view } = currentComparisonState;
+    
+    let title = '';
+    let downloadDataset = '';
+    
+    if (view === 'common_names') {
+        title = 'Common Names (in both JAN and APR)';
+        downloadDataset = 'common_names';
+    } else if (view === 'unique_jan') {
+        title = 'Names Unique to JAN';
+        downloadDataset = 'unique_jan';
+    } else {
+        title = 'Names Unique to APR';
+        downloadDataset = 'unique_apr';
+    }
+    
+    let html = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="color: #2c3e50;">${title}</h3>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="loadComparisonSummary()" style="background-color: #95a5a6; padding: 8px 16px; border: none; color: white; border-radius: 6px; cursor: pointer;">
+                        ← Back to Summary
+                    </button>
+                    <button onclick="downloadComparisonData('${downloadDataset}')" style="background-color: #27ae60; padding: 8px 16px; border: none; color: white; border-radius: 6px; cursor: pointer;">
+                        📥 Download CSV
+                    </button>
+                </div>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+    `;
+    
+    // Render table based on view type
+    if (view === 'common_names') {
+        html += `
+            <thead>
+                <tr style="background: #34495e; color: white;">
+                    <th style="padding: 12px; text-align: left;">Name</th>
+                    <th style="padding: 12px; text-align: right;">JAN Frequency</th>
+                    <th style="padding: 12px; text-align: right;">APR Frequency</th>
+                    <th style="padding: 12px; text-align: right;">Total</th>
+                    <th style="padding: 12px; text-align: center;">In JAN Top 80%</th>
+                    <th style="padding: 12px; text-align: center;">In APR Top 80%</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        data.data.forEach((row, index) => {
+            const bgColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+            html += `
+                <tr style="background: ${bgColor}; border-bottom: 1px solid #ecf0f1;">
+                    <td style="padding: 10px; font-weight: 500;">${escapeHtml(row.firstname)}</td>
+                    <td style="padding: 10px; text-align: right;">${row.jan_frequency.toLocaleString()}</td>
+                    <td style="padding: 10px; text-align: right;">${row.apr_frequency.toLocaleString()}</td>
+                    <td style="padding: 10px; text-align: right;">${row.total_frequency.toLocaleString()}</td>
+                    <td style="padding: 10px; text-align: center;">${row.in_jan_top80 ? '✓' : ''}</td>
+                    <td style="padding: 10px; text-align: center;">${row.in_apr_top80 ? '✓' : ''}</td>
+                </tr>
+            `;
+        });
+    } else {
+        // Unique JAN or APR
+        const dataset = view === 'unique_jan' ? 'JAN' : 'APR';
+        html += `
+            <thead>
+                <tr style="background: #34495e; color: white;">
+                    <th style="padding: 12px; text-align: left;">Row #</th>
+                    <th style="padding: 12px; text-align: left;">Name</th>
+                    <th style="padding: 12px; text-align: left;">Birth Year</th>
+                    <th style="padding: 12px; text-align: left;">Birth Month</th>
+                    <th style="padding: 12px; text-align: left;">Birth Day</th>
+                    <th style="padding: 12px; text-align: center;">In Top 80%</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        data.data.forEach((row, index) => {
+            const bgColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+            const inTop80 = view === 'unique_jan' ? row.in_jan_top80 : row.in_apr_top80;
+            html += `
+                <tr style="background: ${bgColor}; border-bottom: 1px solid #ecf0f1;">
+                    <td style="padding: 10px;">${row.original_row_number}</td>
+                    <td style="padding: 10px; font-weight: 500;">${escapeHtml(row.firstname)}</td>
+                    <td style="padding: 10px;">${row.birthyear || ''}</td>
+                    <td style="padding: 10px;">${row.birthmonth || ''}</td>
+                    <td style="padding: 10px;">${row.birthday || ''}</td>
+                    <td style="padding: 10px; text-align: center;">${inTop80 ? '✓' : ''}</td>
+                </tr>
+            `;
+        });
+    }
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Render pagination if needed
+    if (data.total_pages > 1) {
+        renderComparisonPagination(data.page, data.total_pages, data.total_count);
+    }
+}
+
+function renderComparisonPagination(currentPage, totalPages, totalCount) {
+    const container = document.getElementById('comparison-container');
+    
+    let paginationHtml = `
+        <div class="pagination" style="margin-top: 20px;">
+            <button onclick="goToComparisonPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+                ← Previous
+            </button>
+            <div class="page-info">
+                Page ${currentPage} of ${totalPages} (${totalCount} total)
+            </div>
+            <button onclick="goToComparisonPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+                Next →
+            </button>
+        </div>
+    `;
+    
+    container.innerHTML += paginationHtml;
+}
+
+function goToComparisonPage(page) {
+    currentComparisonState.page = page;
+    fetchComparisonData();
+}
+
+function downloadComparisonData(dataset) {
+    const { filterTop80, top80Only } = currentComparisonState;
+    
+    let url = `/comparison/download/${dataset}/csv`;
+    
+    if (dataset === 'common_names' && filterTop80) {
+        url += `?filter_top80=${filterTop80}`;
+    } else if ((dataset === 'unique_jan' || dataset === 'unique_apr') && top80Only) {
+        url += `?top80_only=true`;
+    }
+    
+    // Show loading state
+    const statusMessage = document.createElement('div');
+    statusMessage.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #3498db; color: white; padding: 15px 20px; border-radius: 8px; z-index: 9999;';
+    statusMessage.textContent = 'Generating CSV... Please wait.';
+    document.body.appendChild(statusMessage);
+    
+    // Trigger download
+    window.location.href = url;
+    
+    // Remove status message after delay
+    setTimeout(() => {
+        statusMessage.remove();
+    }, 3000);
+}
+
+// Add this function to check if comparison tables exist
+function checkComparisonTablesExist() {
+    fetch('/comparison/check')
+        .then(response => response.json())
+        .then(data => {
+            if (data.exists) {
+                // Comparison tables exist - update button
+                const comparisonBtn = document.querySelector('#comparison-section button[onclick*="loadComparisonAnalytics"]');
+                if (comparisonBtn) {
+                    comparisonBtn.disabled = true;
+                    comparisonBtn.textContent = '✅ Comparison Ready';
+                    comparisonBtn.style.backgroundColor = '#95a5a6';
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error checking comparison tables:', err);
+        });
+}
+
+// Update the existing DOMContentLoaded event listener
 document.addEventListener('DOMContentLoaded', function() {
     // Get all sheet keys from the page
     const sheetCards = document.querySelectorAll('.sheet-card');
@@ -898,17 +1323,31 @@ document.addEventListener('DOMContentLoaded', function() {
                     `;
                 }
 
-                if (data.analytics_exists) {  // Add this field from backend
-                   const analyticsBtn = document.querySelector('#analytics-section button[onclick*="loadanalytics"]');
-                   if (analyticsBtn) {
-                       analyticsBtn.disabled = true;
-                       analyticsBtn.textContent = '✅ Analytics Ready';
-                       analyticsBtn.style.backgroundColor = '#95a5a6';
-                   }
+                // Check if analytics table exists for this sheet
+                if (data.analytics_exists) {
+                    // Find all "Load Analytics" buttons in different sections
+                    const analyticsSections = ['#summary_stats-section', '#duplicates-section', '#charts-section', '#common_names-section'];
+                    
+                    analyticsSections.forEach(sectionId => {
+                        const section = document.querySelector(sectionId);
+                        if (section) {
+                            const analyticsBtn = section.querySelector('button[onclick*="loadanalytics"]');
+                            if (analyticsBtn) {
+                                //analyticsBtn.disabled = true;
+                                analyticsBtn.textContent = '✅ Analytics Ready';
+                                analyticsBtn.style.backgroundColor = '#95a5a6';
+                            }
+                        }
+                    });
                 }
             })
             .catch(err => {
                 console.error(`Error checking tables for ${sheetKey}:`, err);
             });
     });
+    
+    // Check if comparison tables exist (after both sheets are loaded)
+    setTimeout(() => {
+        checkComparisonTablesExist();
+    }, 1000); // Give time for sheet checks to complete
 });

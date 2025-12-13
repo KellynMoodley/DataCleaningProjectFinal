@@ -377,6 +377,7 @@
                 <button class="tab" onclick="switchTab('duplicates')">🔍 Duplicate Analysis</button>
                 <button class="tab" onclick="switchTab('charts')">📈 Charts</button>
                 <button class="tab" onclick="switchTab('common_names')">Top 80% Most Common Names</button>
+                <button class="tab" onclick="switchTab('comparison')">Comparison (Jan and Apr)</button>
             </div>
 
             <!-- Original Data Section -->
@@ -537,6 +538,22 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Comparison Section -->
+            <div id="comparison-section" class="table-section">
+                <div class="table-header">
+                    <h2>🔀 Comparison (JAN vs APR)</h2>
+                    <button onclick="loadComparisonAnalytics()" style="background-color: #27ae60; min-width: auto; padding: 8px 16px;">
+                        📥 Load Comparison
+                    </button>
+                </div>
+                <div id="comparison-container" style="margin-top: 20px;">
+                    <div class="loading">
+                        <p style="color: #7f8c8d;">Load comparison analytics to see JAN vs APR analysis</p>
+                    </div>
+                </div>
+            </div>
+
         </div>
     <script src="/static/main.js"></script>
 </body>

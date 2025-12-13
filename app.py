@@ -11,7 +11,7 @@ import uuid
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src import DataCleaner, SupabaseManager, ReportGenerator, DataAnalytics, MostCommonNamesExporter, DB_CONFIG
+from src import DataCleaner, SupabaseManager, ReportGenerator, DataAnalytics, MostCommonNamesExporter, ComparisonAnalytics, DB_CONFIG
 
 # Google Sheets setup
 SERVICE_ACCOUNT_FILE = "service_account.json"
@@ -385,6 +385,7 @@ def create_analytics(sheet_key):
             # Create analytics tables
             analytics.create_analytics_table('clients_2025', sheet['identifier'])
             analytics.create_duplicate_groups_view('clients_2025', sheet['identifier'])
+            analytics.create_duplicate_table_indexes('clients_2025', sheet['identifier'])  # ← Indexes on DUPLICATE tables AFTER they're created
             analytics.create_visualization_tables('clients_2025', sheet['identifier'])
             analytics.create_common_names_table('clients_2025', sheet['identifier'])  # Add this line
             
@@ -595,6 +596,254 @@ def download_common_names(sheet_key, format):
             
     except Exception as e:
         logger.error(f"Error downloading common names: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/comparison/create', methods=['POST'])
+def create_comparison():
+    """Create comparison analytics between JAN and APR"""
+    try:
+        logger.info("Creating comparison analytics between JAN and APR")
+        
+        comparison = ComparisonAnalytics(DB_CONFIG)
+        comparison.connect()
+        
+        try:
+            # Create all comparison tables
+            comparison.create_comparison_analytics(
+                table_name='clients_2025',
+                jan_identifier='jan_2025',
+                apr_identifier='apr_2025'
+            )
+            
+            logger.info("✅ Comparison analytics created successfully")
+            return jsonify({'success': True, 'message': 'Comparison analytics created successfully'})
+            
+        finally:
+            comparison.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error creating comparison analytics: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/comparison/summary')
+def get_comparison_summary():
+    """Get comparison summary statistics"""
+    try:
+        logger.info("Getting comparison summary")
+        
+        comparison = ComparisonAnalytics(DB_CONFIG)
+        comparison.connect()
+        
+        try:
+            summary = comparison.get_comparison_summary('clients_2025')
+            
+            if not summary:
+                return jsonify({'error': 'No comparison data found. Please create comparison analytics first.'}), 404
+            
+            return jsonify(summary)
+            
+        finally:
+            comparison.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error getting comparison summary: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/comparison/common_names')
+def get_comparison_common_names():
+    """Get common names between JAN and APR"""
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        filter_top80 = request.args.get('filter_top80', None)
+        
+        logger.info(f"Getting common names (page={page}, filter={filter_top80})")
+        
+        comparison = ComparisonAnalytics(DB_CONFIG)
+        comparison.connect()
+        
+        try:
+            data, total_count = comparison.get_common_names(
+                'clients_2025',
+                page=page,
+                per_page=per_page,
+                filter_top80_only=filter_top80
+            )
+            
+            total_pages = (total_count + per_page - 1) // per_page
+            
+            return jsonify({
+                'data': data,
+                'page': page,
+                'per_page': per_page,
+                'total_count': total_count,
+                'total_pages': total_pages
+            })
+            
+        finally:
+            comparison.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error getting common names: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/comparison/unique_jan')
+def get_comparison_unique_jan():
+    """Get names unique to JAN"""
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        top80_only = request.args.get('top80_only', 'false').lower() == 'true'
+        
+        logger.info(f"Getting unique JAN names (page={page}, top80_only={top80_only})")
+        
+        comparison = ComparisonAnalytics(DB_CONFIG)
+        comparison.connect()
+        
+        try:
+            data, total_count = comparison.get_unique_jan_names(
+                'clients_2025',
+                page=page,
+                per_page=per_page,
+                top80_only=top80_only
+            )
+            
+            total_pages = (total_count + per_page - 1) // per_page
+            
+            return jsonify({
+                'data': data,
+                'page': page,
+                'per_page': per_page,
+                'total_count': total_count,
+                'total_pages': total_pages
+            })
+            
+        finally:
+            comparison.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error getting unique JAN names: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/comparison/unique_apr')
+def get_comparison_unique_apr():
+    """Get names unique to APR"""
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        top80_only = request.args.get('top80_only', 'false').lower() == 'true'
+        
+        logger.info(f"Getting unique APR names (page={page}, top80_only={top80_only})")
+        
+        comparison = ComparisonAnalytics(DB_CONFIG)
+        comparison.connect()
+        
+        try:
+            data, total_count = comparison.get_unique_apr_names(
+                'clients_2025',
+                page=page,
+                per_page=per_page,
+                top80_only=top80_only
+            )
+            
+            total_pages = (total_count + per_page - 1) // per_page
+            
+            return jsonify({
+                'data': data,
+                'page': page,
+                'per_page': per_page,
+                'total_count': total_count,
+                'total_pages': total_pages
+            })
+            
+        finally:
+            comparison.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error getting unique APR names: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/comparison/download/<dataset>/<format>')
+def download_comparison(dataset, format):
+    """Download comparison data as CSV"""
+    try:
+        if dataset not in ['common_names', 'unique_jan', 'unique_apr']:
+            return jsonify({'error': 'Invalid dataset'}), 400
+        
+        if format != 'csv':
+            return jsonify({'error': 'Only CSV format is supported'}), 400
+        
+        logger.info(f"Downloading {dataset} as {format}")
+        
+        comparison = ComparisonAnalytics(DB_CONFIG)
+        comparison.connect()
+        
+        try:
+            import tempfile
+            import os
+            from flask import send_file
+            
+            # Create temporary file
+            temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', newline='')
+            
+            if dataset == 'common_names':
+                filter_top80 = request.args.get('filter_top80', None)
+                comparison.export_common_names_to_csv('clients_2025', temp_file.name, filter_top80)
+                filename = 'common_names.csv'
+            elif dataset == 'unique_jan':
+                top80_only = request.args.get('top80_only', 'false').lower() == 'true'
+                comparison.export_unique_jan_to_csv('clients_2025', temp_file.name, top80_only)
+                filename = 'unique_jan.csv'
+            else:  # unique_apr
+                top80_only = request.args.get('top80_only', 'false').lower() == 'true'
+                comparison.export_unique_apr_to_csv('clients_2025', temp_file.name, top80_only)
+                filename = 'unique_apr.csv'
+            
+            temp_file.close()
+            
+            return send_file(
+                temp_file.name,
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=filename
+            )
+            
+        finally:
+            comparison.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error downloading comparison data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/comparison/check')
+def check_comparison_tables():
+    """Check if comparison tables exist"""
+    try:
+        init_supabase()
+        
+        safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
+        comparison_summary_table = f"{safe_table_name}_comparison_summary"
+        
+        with supabase_manager.conn.cursor() as cur:
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = %s
+                )
+            """, (comparison_summary_table,))
+            exists = cur.fetchone()[0]
+        
+        return jsonify({
+            'success': True,
+            'exists': exists
+        })
+    except Exception as e:
+        logger.error(f"Error checking comparison tables: {e}")
         return jsonify({'error': str(e)}), 500
 
 
