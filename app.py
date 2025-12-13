@@ -433,6 +433,88 @@ def get_analytics_summary(sheet_key):
     except Exception as e:
         logger.error(f"Error generating analytics summary: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/analytics/<sheet_key>/duplicates/<group_type>')
+def get_duplicate_groups(sheet_key, group_type):
+    """Get duplicate groups by type (name_year, name_month, name_day)"""
+    try:
+        sheet = SHEETS_CONFIG.get(sheet_key)
+        if not sheet:
+            return jsonify({'error': 'Invalid sheet key'}), 404
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        
+        # Validate group_type
+        if group_type not in ['name_year', 'name_month', 'name_day']:
+            return jsonify({'error': 'Invalid group type'}), 400
+        
+        logger.info(f"Getting {group_type} duplicates for sheet: {sheet_key}")
+        
+        analytics = DataAnalytics(DB_CONFIG)
+        analytics.connect()
+        
+        try:
+            duplicates, total_count = analytics.get_duplicate_groups(
+                'clients_2025', 
+                sheet['identifier'], 
+                group_type, 
+                page, 
+                per_page
+            )
+            
+            total_pages = (total_count + per_page - 1) // per_page
+            
+            return jsonify({
+                'data': duplicates,
+                'page': page,
+                'per_page': per_page,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'group_type': group_type
+            })
+            
+        finally:
+            analytics.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error getting duplicate groups: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/analytics/<sheet_key>/charts/<chart_type>')
+def get_chart_data(sheet_key, chart_type):
+    """Get chart data (birthyear or birthmonth distributions)"""
+    try:
+        sheet = SHEETS_CONFIG.get(sheet_key)
+        if not sheet:
+            return jsonify({'error': 'Invalid sheet key'}), 404
+        
+        # Validate chart_type
+        if chart_type not in ['birthyear', 'birthmonth']:
+            return jsonify({'error': 'Invalid chart type'}), 400
+        
+        logger.info(f"Getting {chart_type} chart data for sheet: {sheet_key}")
+        
+        analytics = DataAnalytics(DB_CONFIG)
+        analytics.connect()
+        
+        try:
+            chart_data = analytics.get_chart_data(
+                'clients_2025', 
+                sheet['identifier'], 
+                chart_type
+            )
+            
+            return jsonify({'data': chart_data, 'chart_type': chart_type})
+            
+        finally:
+            analytics.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error getting chart data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

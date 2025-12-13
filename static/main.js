@@ -107,25 +107,34 @@ function viewSheetData(sheetKey) {
 // Switch between tabs
 function switchTab(tableType) {
     // Update tab active state
-    document.querySelectorAll('.tab').forEach(tab => {
+    document.querySelectorAll('.tabs > .tab').forEach(tab => {
         tab.classList.remove('active');
     });
-    document.querySelector(`[onclick*="${tableType}"]`).classList.add('active');
+    event.target.classList.add('active');
     
     // Hide all sections
     document.querySelectorAll('.table-section').forEach(section => {
         section.classList.remove('show');
     });
 
-    //analytics
-    if (tableType === 'analytics') {
-        document.getElementById('analytics-section').classList.add('show');
-        loadAnalyticsData();  // New function
-    } else {
-        document.getElementById(`${tableType}-section`).classList.add('show');
-        loadTableData(tableType);
+    // Show the selected section
+    const sectionId = `${tableType}-section`;
+    const section = document.getElementById(sectionId);
+    
+    if (section) {
+        section.classList.add('show');
+        
+        // Load data based on section type
+        if (tableType === 'original' || tableType === 'included' || tableType === 'excluded') {
+            loadTableData(tableType);
+        } else if (tableType === 'summary_stats') {
+            loadAnalyticsSummary();
+        } else if (tableType === 'duplicates') {
+            loadDuplicates('name_year');
+        } else if (tableType === 'charts') {
+            loadChart('birthyear');
+        }
     }
-
 }
 
 // Load table data
@@ -443,6 +452,198 @@ function loadAnalyticsSummary() {
         });
 }
 
+// State for duplicates
+let currentDuplicatesState = {
+    groupType: 'name_year',
+    page: 1,
+    perPage: 50
+};
+
+function loadAnalyticsDistributions() {
+    // Load default chart
+    loadChart('birthyear');
+}
+
+function loadAnalyticsDuplicates() {
+    // Load default duplicates
+    loadDuplicates('name_year');
+}
+
+function loadDuplicates(groupType) {
+    if (!currentSheet) return;
+    
+    currentDuplicatesState.groupType = groupType;
+    currentDuplicatesState.page = 1;
+    
+    // Update tab active state
+    const duplicateTabs = document.querySelectorAll('#analytics-duplicates .tab');
+    duplicateTabs.forEach(tab => tab.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    fetchDuplicates();
+}
+
+function fetchDuplicates() {
+    const container = document.getElementById('duplicates-container');
+    const { groupType, page, perPage } = currentDuplicatesState;
+    
+    container.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading duplicates...</p>
+        </div>
+    `;
+    
+    fetch(`/analytics/${currentSheet}/duplicates/${groupType}?page=${page}&per_page=${perPage}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
+                return;
+            }
+            
+            if (!data.data || data.data.length === 0) {
+                container.innerHTML = `<p style="text-align: center; padding: 20px; color: #7f8c8d;">No duplicates found for this combination</p>`;
+                document.getElementById('duplicates-pagination').innerHTML = '';
+                return;
+            }
+            
+            renderDuplicates(data.data, groupType);
+            renderDuplicatesPagination(data.page, data.total_pages, data.total_count);
+        })
+        .catch(error => {
+            console.error('Error loading duplicates:', error);
+            container.innerHTML = `<p style="color: #e74c3c;">Failed to load duplicates</p>`;
+        });
+}
+
+function renderDuplicates(duplicates, groupType) {
+    const container = document.getElementById('duplicates-container');
+    
+    let html = '<div style="margin-top: 20px;">';
+    
+    duplicates.forEach(dup => {
+        html += `
+            <div style="background: #f8f9fa; border-left: 4px solid #e74c3c; padding: 16px; margin-bottom: 16px; border-radius: 4px;">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #2c3e50;">
+        `;
+        
+        if (groupType === 'name_year') {
+            html += `${escapeHtml(dup.firstname)} - ${dup.birthyear} <span style="color: #e74c3c;">(${dup.duplicate_count} records)</span>`;
+        } else if (groupType === 'name_month') {
+            html += `${escapeHtml(dup.firstname)} - Month ${dup.birthmonth} <span style="color: #e74c3c;">(${dup.duplicate_count} records)</span>`;
+        } else if (groupType === 'name_day') {
+            html += `${escapeHtml(dup.firstname)} - Day ${dup.birthday} <span style="color: #e74c3c;">(${dup.duplicate_count} records)</span>`;
+        }
+        
+        html += `
+                </div>
+                <div style="font-size: 0.9rem; color: #7f8c8d;">
+                    <strong>Original Rows:</strong> ${dup.original_row_numbers.join(', ')}<br>
+                    <strong>Record IDs:</strong> ${dup.row_ids.join(', ')}
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderDuplicatesPagination(currentPage, totalPages, totalCount) {
+    const container = document.getElementById('duplicates-pagination');
+    
+    if (totalPages <= 1) {
+        container.innerHTML = `<div class="page-info">Total: ${totalCount} duplicate groups</div>`;
+        return;
+    }
+    
+    let html = `
+        <button onclick="goToDuplicatesPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+            ← Previous
+        </button>
+        <div class="page-info">
+            Page ${currentPage} of ${totalPages} (${totalCount} duplicate groups)
+        </div>
+        <button onclick="goToDuplicatesPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+            Next →
+        </button>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function goToDuplicatesPage(page) {
+    currentDuplicatesState.page = page;
+    fetchDuplicates();
+}
+
+function loadChart(chartType) {
+    if (!currentSheet) return;
+    
+    // Update tab active state
+    const chartTabs = document.querySelectorAll('#analytics-charts .tab');
+    chartTabs.forEach(tab => tab.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    const container = document.getElementById('chart-container');
+    
+    container.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading chart...</p>
+        </div>
+    `;
+    
+    fetch(`/analytics/${currentSheet}/charts/${chartType}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
+                return;
+            }
+            
+            renderChart(data.data, chartType);
+        })
+        .catch(error => {
+            console.error('Error loading chart:', error);
+            container.innerHTML = `<p style="color: #e74c3c;">Failed to load chart</p>`;
+        });
+}
+
+function renderChart(data, chartType) {
+    const container = document.getElementById('chart-container');
+    
+    if (!data || data.length === 0) {
+        container.innerHTML = `<p style="text-align: center; padding: 20px; color: #7f8c8d;">No data available</p>`;
+        return;
+    }
+    
+    // Simple bar chart visualization
+    let html = '<div style="margin-top: 20px;">';
+    
+    const maxCount = Math.max(...data.map(d => d.count));
+    
+    data.forEach(item => {
+        const percentage = (item.count / maxCount) * 100;
+        const label = chartType === 'birthyear' ? item.birthyear : `Month ${item.birthmonth}`;
+        
+        html += `
+            <div style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="font-weight: 500;">${label}</span>
+                    <span style="color: #7f8c8d;">${item.count.toLocaleString()}</span>
+                </div>
+                <div style="background: #ecf0f1; border-radius: 4px; height: 24px; overflow: hidden;">
+                    <div style="background: linear-gradient(90deg, #3498db, #2980b9); height: 100%; width: ${percentage}%; transition: width 0.3s;"></div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
 
 // Check table status on page load
 document.addEventListener('DOMContentLoaded', function() {

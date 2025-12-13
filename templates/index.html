@@ -372,9 +372,12 @@
                 <button class="tab active" onclick="switchTab('original')">📄 Original Data</button>
                 <button class="tab" onclick="switchTab('included')">✅ Included Data</button>
                 <button class="tab" onclick="switchTab('excluded')">❌ Excluded Data</button>
-                <button class="tab" onclick="switchTab('analytics')">📊 Analytics</button>
+                <button class="tab" onclick="switchTab('summary_stats')">📊 Summary Statistics</button>
+                <button class="tab" onclick="switchTab('duplicates')">🔍 Duplicate Analysis</button>
+                <button class="tab" onclick="switchTab('charts')">📈 Charts</button>
             </div>
 
+            <!-- Original Data Section -->
             <div id="original-section" class="table-section show">
                 <div class="table-header">
                     <h2>Original Data</h2>
@@ -396,6 +399,7 @@
                 <div class="pagination" id="original-pagination"></div>
             </div>
 
+            <!-- Included Data Section -->
             <div id="included-section" class="table-section">
                 <div class="table-header">
                     <h2>Included Data (Valid Records)</h2>
@@ -407,7 +411,6 @@
                             📄 Download PDF
                         </button>
                     </div>
-
                     <div class="table-controls">
                         <select id="included-per-page" onchange="changePerPage('included')">
                             <option value="50">50 per page</option>
@@ -426,6 +429,7 @@
                 <div class="pagination" id="included-pagination"></div>
             </div>
 
+            <!-- Excluded Data Section -->
             <div id="excluded-section" class="table-section">
                 <div class="table-header">
                     <h2>Excluded Data (Invalid Records)</h2>
@@ -437,7 +441,6 @@
                             📄 Download PDF
                         </button>
                     </div>
-
                     <div class="table-controls">
                         <select id="excluded-per-page" onchange="changePerPage('excluded')">
                             <option value="50">50 per page</option>
@@ -455,27 +458,65 @@
                 </div>
                 <div class="pagination" id="excluded-pagination"></div>
             </div>
-            <div id="analytics-section" class="table-section">
-                <h2>📊 Analytics & Insights</h2>
-                <div class="export-buttons" style="display: flex; gap: 10px;">
-                        <button onclick="loadanalytics('included')" style="background-color: #27ae60; min-width: auto; padding: 8px 16px;">
-                            📥 Load analytics
-                        </button>
-                    </div>
-                
-                <!-- Summary Cards -->
-                <div id="analytics-summary" style="margin-bottom: 30px;">
-                    <h3>Summary Statistics</h3>
+
+            <!-- Summary Statistics Section -->
+            <div id="summary_stats-section" class="table-section">
+                <div class="table-header">
+                    <h2>📊 Summary Statistics</h2>
+                    <button onclick="loadanalytics()" style="background-color: #27ae60; min-width: auto; padding: 8px 16px;">
+                        📥 Load Analytics
+                    </button>
+                </div>
+                <div id="analytics-summary" style="margin-top: 20px;">
                     <div class="loading">
                         <div class="spinner"></div>
-                        <p>Loading summary...</p>
+                        <p>Click "Load Analytics" to generate statistics...</p>
                     </div>
                 </div>
-                
-            
+            </div>
 
+            <!-- Duplicates Analysis Section -->
+            <div id="duplicates-section" class="table-section">
+                <div class="table-header">
+                    <h2>🔍 Duplicate Analysis</h2>
+                    <button onclick="loadanalytics()" style="background-color: #27ae60; min-width: auto; padding: 8px 16px;">
+                        📥 Load Analytics
+                    </button>
+                </div>
+                <div style="margin-top: 20px;">
+                    <div class="tabs" style="border-bottom: 1px solid #ecf0f1;">
+                        <button class="tab active" onclick="loadDuplicates('name_year')">Name + Year</button>
+                        <button class="tab" onclick="loadDuplicates('name_month')">Name + Month</button>
+                        <button class="tab" onclick="loadDuplicates('name_day')">Name + Day</button>
+                    </div>
+                    <div id="duplicates-container" style="margin-top: 20px;">
+                        <div class="loading">
+                            <p style="color: #7f8c8d;">Load analytics first, then select a duplicate type</p>
+                        </div>
+                    </div>
+                    <div class="pagination" id="duplicates-pagination"></div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div id="charts-section" class="table-section">
+                <div class="table-header">
+                    <h2>📈 Birth Distribution Charts</h2>
+                    <button onclick="loadanalytics()" style="background-color: #27ae60; min-width: auto; padding: 8px 16px;">
+                        📥 Load Analytics
+                    </button>
+                </div>
+                <div style="margin-top: 20px;">
+                    <div class="tabs" style="border-bottom: 1px solid #ecf0f1;">
+                        <button class="tab active" onclick="loadChart('birthyear')">By Year</button>
+                        <button class="tab" onclick="loadChart('birthmonth')">By Month</button>
+                    </div>
+                    <div id="chart-container" style="margin-top: 20px;">
+                        <canvas id="analytics-chart" style="max-height: 400px;"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
 
     <script src="/static/main.js"></script>
 </body>
