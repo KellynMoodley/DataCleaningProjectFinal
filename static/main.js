@@ -135,7 +135,7 @@ function switchTab(tableType) {
         } else if (tableType === 'charts') {
             loadChart('birthyear');
         }else if (tableType === 'common_names') {
-            loadChart('birthyear');
+            loadCommonNames();
         }
     }
 }
@@ -730,6 +730,71 @@ function renderChart(data, chartType) {
     });
 }
 
+function loadCommonNames() {
+    if (!currentSheet) return;
+    
+    const container = document.getElementById('common-names-container');
+    
+    // Show loading
+    container.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading common names...</p>
+        </div>
+    `;
+    
+    fetch(`/analytics/${currentSheet}/common_names`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
+                return;
+            }
+            
+            if (!data.names || data.names.length === 0) {
+                container.innerHTML = `<p style="text-align: center; padding: 20px; color: #7f8c8d;">No data available</p>`;
+                return;
+            }
+            
+            // Render the names
+            let html = `
+                <div style="padding: 20px;">
+                    <div class="stats" style="margin-bottom: 20px;">
+                        <div class="stat-item">
+                            <div class="stat-label">Number of Names</div>
+                            <div class="stat-value">${data.name_count.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Records Covered</div>
+                            <div class="stat-value">${data.record_count.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Coverage</div>
+                            <div class="stat-value">80%</div>
+                        </div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                        <h3 style="margin-top: 0;">Names List:</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">
+            `;
+            
+            data.names.forEach(name => {
+                html += `<div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #3498db;">${escapeHtml(name)}</div>`;
+            });
+            
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading common names:', error);
+            container.innerHTML = `<p style="color: #e74c3c;">Failed to load common names</p>`;
+        });
+}
 
 // Check table status on page load
 document.addEventListener('DOMContentLoaded', function() {

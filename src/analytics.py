@@ -614,3 +614,109 @@ class DataAnalytics:
                 logger.warning(f"Index creation skipped or failed: {e}")
         
         logger.info(f"✅ All indexes created successfully")
+        
+        
+    def create_common_names_table(self, table_name: str, sheet_identifier: str):
+        """Create a table with the top 80% most common names with their frequencies"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        original_table = f"{safe_table_name}_{sheet_identifier}_original"
+        common_names_table = f"{safe_table_name}_{sheet_identifier}_common_names"
+        
+        # Drop existing table if it exists
+        drop_query = f"DROP TABLE IF EXISTS {common_names_table}"
+        self.execute_sql(drop_query)
+        
+        # Create common names table with frequencies
+        create_query = f"""
+        CREATE TABLE {common_names_table} AS
+        WITH included_data AS (
+            SELECT * FROM {original_table}
+            WHERE status = 'included'
+        ),
+        name_frequencies AS (
+            SELECT 
+                firstname,
+                COUNT(*) as frequency,
+                SUM(COUNT(*)) OVER () as total_records
+            FROM included_data
+            WHERE firstname IS NOT NULL AND firstname != ''
+            GROUP BY firstname
+        ),
+        cumulative_names AS (
+            SELECT 
+                firstname,
+                frequency,
+                total_records,
+                SUM(frequency) OVER (ORDER BY frequency DESC, firstname) as cumulative_count,
+                (SUM(frequency) OVER (ORDER BY frequency DESC, firstname))::float / total_records as cumulative_percentage,
+                (frequency::float / total_records * 100) as percentage_of_total
+            FROM name_frequencies
+        ),
+        top_80_names AS (
+            SELECT 
+                firstname,
+                frequency,
+                total_records,
+                cumulative_count,
+                cumulative_percentage,
+                percentage_of_total,
+                ROW_NUMBER() OVER (ORDER BY frequency DESC, firstname) as rank
+            FROM cumulative_names
+            WHERE cumulative_percentage <= 0.80
+        )
+        SELECT 
+            rank,
+            firstname,
+            frequency,
+            ROUND(percentage_of_total::numeric, 2) as percentage_of_total,
+            cumulative_count,
+            ROUND((cumulative_percentage * 100)::numeric, 2) as cumulative_percentage,
+            total_records
+        FROM top_80_names
+        ORDER BY rank;
+        """
+        
+        logger.info(f"Creating common names table: {common_names_table}")
+        self.execute_sql(create_query)
+        
+        # Create indexes for fast queries
+        logger.info(f"Creating indexes on {common_names_table}...")
+        indexes = [
+            f"CREATE INDEX IF NOT EXISTS idx_{common_names_table}_rank ON {common_names_table}(rank)",
+            f"CREATE INDEX IF NOT EXISTS idx_{common_names_table}_frequency ON {common_names_table}(frequency DESC)",
+            f"CREATE INDEX IF NOT EXISTS idx_{common_names_table}_firstname ON {common_names_table}(firstname)"
+        ]
+        
+        for idx_query in indexes:
+            try:
+                self.execute_sql(idx_query)
+            except Exception as e:
+                logger.warning(f"Index creation skipped or failed: {e}")
+        
+        logger.info(f"✅ Common names table created successfully")
+
+
+    def get_common_names_data(self, table_name: str, sheet_identifier: str) -> List[Dict[str, Any]]:
+        """Retrieve common names data"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        common_names_table = f"{safe_table_name}_{sheet_identifier}_common_names"
+        
+        try:
+            with self.connection.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f"""
+                    SELECT 
+                        rank,
+                        firstname,
+                        frequency,
+                        percentage_of_total,
+                        cumulative_count,
+                        cumulative_percentage,
+                        total_records
+                    FROM {common_names_table}
+                    ORDER BY rank
+                """)
+                rows = cur.fetchall()
+                return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"❌ Error retrieving common names data: {e}")
+            raise
