@@ -80,7 +80,7 @@ def get_sheet_data(spreadsheet_id, range_name):
                 raise
 
 
-def process_and_clean_sheet_data(sheet_key, batch_size=100000, store_original=True):
+def process_and_clean_sheet_data(sheet_key, batch_size=100000):
     """
     Process Google Sheets data directly with row_id generation and cleaning
     
@@ -109,22 +109,12 @@ def process_and_clean_sheet_data(sheet_key, batch_size=100000, store_original=Tr
     
     # Step 2: Create tables
     init_supabase()
-    supabase_manager.create_table_if_not_exists('clients_2025', config['identifier'])
-    if store_original:
-        supabase_manager.create_original_table('clients_2025', config['identifier'])
+    supabase_manager.create_original_table('clients_2025', config['identifier'])
     
     # Step 3: Clear existing data
     safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
-    included_table = f"{safe_table_name}_{config['identifier']}_included"
-    excluded_table = f"{safe_table_name}_{config['identifier']}_excluded"
-    
-    logger.info("Clearing existing data...")
-    supabase_manager.clear_table(included_table)
-    supabase_manager.clear_table(excluded_table)
-    
-    if store_original:
-        original_table = f"{safe_table_name}_{config['identifier']}_original"
-        supabase_manager.clear_table(original_table)
+    original_table = f"{safe_table_name}_{config['identifier']}_original"
+    supabase_manager.clear_table(original_table)
     
     # Step 4: Process in batches
     total_included = 0
@@ -143,7 +133,7 @@ def process_and_clean_sheet_data(sheet_key, batch_size=100000, store_original=Tr
         
         # Parse batch with row_id generation
         batch_with_ids = []
-        original_batch = []
+
         
         for idx in range(batch_start, batch_end):
             row_data = raw_data[idx]
@@ -161,74 +151,27 @@ def process_and_clean_sheet_data(sheet_key, batch_size=100000, store_original=Tr
             }
             batch_with_ids.append(parsed_row)
             
-            # Store for original table if needed
-            if store_original:
-                original_batch.append({
-                    'row_id': row_id,
-                    'original_row_number': original_row_number,
-                    'firstname': parsed_row['firstname'],
-                    'birthday': parsed_row['birthday'],
-                    'birthmonth': parsed_row['birthmonth'],
-                    'birthyear': parsed_row['birthyear']
-                })
         
         # Clean this batch
         clean_start = time.time()
         cleaner = DataCleaner()
-        included_data, excluded_data = cleaner.clean_dataset(batch_with_ids)
+        all_data = cleaner.clean_dataset(batch_with_ids)
         clean_time = time.time() - clean_start
         
-        logger.info(f"Batch {batch_num + 1}: Cleaned in {clean_time:.1f}s - {len(included_data)} included, {len(excluded_data)} excluded")
+        included_count = sum(1 for row in all_data if row['status'] == 'included')
+        excluded_count = sum(1 for row in all_data if row['status'] == 'excluded')
+        logger.info(f"Batch {batch_num + 1}: Cleaned in {clean_time:.1f}s - {included_count} included, {excluded_count} excluded")
         
         # Parallel inserts
         insert_start = time.time()
         
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = []
-            
-            # Submit included insert job
-            if included_data:
-                futures.append(
-                    executor.submit(
-                        supabase_manager.append_data,
-                        included_table,
-                        included_data
-                    )
-                )
-            
-            # Submit excluded insert job
-            if excluded_data:
-                futures.append(
-                    executor.submit(
-                        supabase_manager.append_data,
-                        excluded_table,
-                        excluded_data
-                    )
-                )
-            
-            # Submit original insert job (if enabled)
-            if store_original and original_batch:
-                futures.append(
-                    executor.submit(
-                        supabase_manager.append_data,
-                        original_table,
-                        original_batch
-                    )
-                )
-            
-            # Wait for all inserts to complete
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    logger.error(f"Error in parallel insert: {e}")
-                    raise
-        
+        supabase_manager.append_data(original_table, all_data)
         insert_time = time.time() - insert_start
         
+        
         # Update totals
-        total_included += len(included_data)
-        total_excluded += len(excluded_data)
+        total_included += included_count
+        total_excluded += excluded_count
         
         # Batch summary
         batch_total = time.time() - batch_start_time
@@ -281,13 +224,18 @@ def get_table_data(sheet_key, table_type):
     if not sheet:
         return jsonify({"error": "Invalid sheet key"}), 400
     
-    if table_type not in ['original', 'included', 'excluded']:
+    if table_type not in ['included', 'excluded', 'original']:
         return jsonify({"error": "Invalid table type"}), 400
     
     try:
         init_supabase()
         safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
-        table_name = f"{safe_table_name}_{sheet['identifier']}_{table_type}"
+        table_name = f"{safe_table_name}_{sheet['identifier']}_original"
+        
+        # Add status filter
+        status_filter = ""
+        if table_type in ['included', 'excluded']:
+            status_filter = f"WHERE status = '{table_type.capitalize()}'"
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
@@ -301,7 +249,8 @@ def get_table_data(sheet_key, table_type):
             page, 
             per_page, 
             sort_by, 
-            sort_order
+            sort_order, 
+            table_type.capitalize() if table_type in ['included', 'excluded'] else None
         )
         
         return jsonify({

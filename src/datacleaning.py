@@ -36,8 +36,7 @@ class DataCleaner:
     
     def __init__(self):
         """Initialize the DataCleaner"""
-        self.included_data = []
-        self.excluded_data = []
+        self.all_data_data = []
     
     @staticmethod
     def is_valid_name(name: str) -> Tuple[bool, str]:
@@ -129,15 +128,14 @@ class DataCleaner:
         birth_day = row.get('birthday', '') or ''
         birth_month = row.get('birthmonth', '') or ''
         birth_year = row.get('birthyear', '') or ''
-        
-        # Validate name
+
+        # Validate name and store original
         name_valid, name_error = self.is_valid_name(str(name))
         if not name_valid:
             errors.append(name_error)
-        else:
-            cleaned['name'] = str(name).strip()
-        
-        # Validate day
+        cleaned['firstname'] = str(name).strip() if name else ''
+
+        # Validate day and store original
         day_valid, day_error, day_value = self.is_valid_numeric(birth_day, 'birth_day')
         if not day_valid:
             errors.append(day_error)
@@ -145,10 +143,9 @@ class DataCleaner:
             day_range_valid, day_range_error = self.is_valid_day(day_value)
             if not day_range_valid:
                 errors.append(day_range_error)
-            else:
-                cleaned['birth_day'] = day_value
-        
-        # Validate month
+        cleaned['birthday'] = str(birth_day) if birth_day else ''
+
+        # Validate month and store original
         month_valid, month_error, month_value = self.is_valid_numeric(birth_month, 'birth_month')
         if not month_valid:
             errors.append(month_error)
@@ -156,10 +153,9 @@ class DataCleaner:
             month_range_valid, month_range_error = self.is_valid_month(month_value)
             if not month_range_valid:
                 errors.append(month_range_error)
-            else:
-                cleaned['birth_month'] = month_value
-        
-        # Validate year
+        cleaned['birthmonth'] = str(birth_month) if birth_month else ''
+
+        # Validate year and store original
         year_valid, year_error, year_value = self.is_valid_numeric(birth_year, 'birth_year')
         if not year_valid:
             errors.append(year_error)
@@ -167,14 +163,7 @@ class DataCleaner:
             year_range_valid, year_range_error = self.is_valid_year(year_value)
             if not year_range_valid:
                 errors.append(year_range_error)
-            else:
-                cleaned['birth_year'] = year_value
-        
-        # Store original values for excluded data
-        cleaned['original_name'] = str(name) if name else None
-        cleaned['original_birth_day'] = str(birth_day) if birth_day else None
-        cleaned['original_birth_month'] = str(birth_month) if birth_month else None
-        cleaned['original_birth_year'] = str(birth_year) if birth_year else None
+        cleaned['birthyear'] = str(birth_year) if birth_year else ''
         
         is_valid = len(errors) == 0
         return is_valid, cleaned, errors
@@ -190,44 +179,46 @@ class DataCleaner:
         Returns:
             Tuple of (included_data, excluded_data)
         """
-        self.included_data = []
-        self.excluded_data = []
+        self.all_data = []
         
         logger.info(f"Starting to clean {len(data)} rows...")
         
         for idx, row in enumerate(data):
             is_valid, cleaned_row, errors = self.clean_row(row)
-            
             if is_valid:
-                # Only include valid fields for included data
                 included_row = {
                     'row_id': cleaned_row['row_id'],
                     'original_row_number': cleaned_row['original_row_number'],
-                    'name': cleaned_row['name'],
-                    'birth_day': cleaned_row['birth_day'],
-                    'birth_month': cleaned_row['birth_month'],
-                    'birth_year': cleaned_row['birth_year']
+                    'firstname': cleaned_row['firstname'],
+                    'birthday': cleaned_row['birthday'],
+                    'birthmonth': cleaned_row['birthmonth'],
+                    'birthyear': cleaned_row['birthyear'],
+                    'exclusion_reason': None,
+                    'status': "included"
                 }
-                self.included_data.append(included_row)
+                self.all_data.append(included_row)
             else:
-                # Create exclusion record with all reasons
                 excluded_row = {
                     'row_id': cleaned_row['row_id'],
                     'original_row_number': cleaned_row['original_row_number'],
-                    'original_name': cleaned_row['original_name'],
-                    'original_birth_day': cleaned_row['original_birth_day'],
-                    'original_birth_month': cleaned_row['original_birth_month'],
-                    'original_birth_year': cleaned_row['original_birth_year'],
-                    'exclusion_reason': '; '.join(errors)
+                    'firstname': cleaned_row['firstname'],
+                    'birthday': cleaned_row['birthday'],
+                    'birthmonth': cleaned_row['birthmonth'],
+                    'birthyear': cleaned_row['birthyear'],
+                    'exclusion_reason': '; '.join(errors),
+                    'status': "excluded"
                 }
-                self.excluded_data.append(excluded_row)
+                self.all_data.append(excluded_row)
             
             if (idx + 1) % 100000 == 0:
                 logger.info(f"Processed {idx + 1} rows...")
+                
+        # Calculate from self.all_data
+        included_count = sum(1 for row in self.all_data if row['status'] == 'included')
+        excluded_count = sum(1 for row in self.all_data if row['status'] == 'excluded')
+        logger.info(f"Cleaning complete: {included_count} included, {excluded_count} excluded")
         
-        logger.info(f"Cleaning complete: {len(self.included_data)} included, {len(self.excluded_data)} excluded")
-        
-        return self.included_data, self.excluded_data
+        return self.all_data
 
     
     def get_cleaning_summary(self) -> Dict[str, Any]:
@@ -237,12 +228,12 @@ class DataCleaner:
         Returns:
             Dictionary containing summary statistics
         """
-        total = len(self.included_data) + len(self.excluded_data)
+        total = len(self.all_data)
         
         return {
             'total_rows': total,
-            'included_count': len(self.included_data),
-            'excluded_count': len(self.excluded_data),
-            'included_percentage': (len(self.included_data) / total * 100) if total > 0 else 0,
-            'excluded_percentage': (len(self.excluded_data) / total * 100) if total > 0 else 0
+            'included_count': sum(1 for row in self.all_data if row['status'] == 'included'),
+            'excluded_count': sum(1 for row in self.all_data if row['status'] == 'excluded'),
+            'included_percentage': sum(1 for row in self.all_data if row['status'] == 'included')/ total * 100 if total > 0 else 0,
+            'excluded_percentage': sum(1 for row in self.all_data if row['status'] == 'excluded') / total * 100 if total > 0 else 0
         }

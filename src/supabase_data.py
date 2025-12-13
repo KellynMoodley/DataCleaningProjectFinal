@@ -69,46 +69,9 @@ class SupabaseManager:
     # ---------------------------
     # Table Creation
     # ---------------------------
-    def create_table_if_not_exists(self, table_name: str, sheet_identifier: str):
-        """Create included and excluded tables."""
-        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
-        included_table = f"{safe_table_name}_{sheet_identifier}_included"
-        excluded_table = f"{safe_table_name}_{sheet_identifier}_excluded"
-
-        included_sql = f"""
-        CREATE TABLE IF NOT EXISTS {included_table} (
-            row_id UUID PRIMARY KEY,
-            original_row_number INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            birth_day INTEGER NOT NULL CHECK (birth_day >= 1 AND birth_day <= 31),
-            birth_month INTEGER NOT NULL CHECK (birth_month >= 1 AND birth_month <= 12),
-            birth_year INTEGER NOT NULL CHECK (birth_year >= 1900),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_{included_table}_row_number ON {included_table}(original_row_number);
-        """
-
-        excluded_sql = f"""
-        CREATE TABLE IF NOT EXISTS {excluded_table} (
-            id BIGSERIAL PRIMARY KEY,
-            row_id UUID NOT NULL,
-            original_row_number INTEGER NOT NULL,
-            original_name TEXT,
-            original_birth_day TEXT,
-            original_birth_month TEXT,
-            original_birth_year TEXT,
-            exclusion_reason TEXT NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_{excluded_table}_row_number ON {excluded_table}(original_row_number);
-        """
-
-        logger.info(f"Creating tables: {included_table} & {excluded_table}")
-        self.execute_sql(included_sql)
-        self.execute_sql(excluded_sql)
 
     def create_original_table(self, table_name: str, sheet_identifier: str):
-        """Create table for original raw data."""
+        """Create table for data."""
         safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
         original_table = f"{safe_table_name}_{sheet_identifier}_original"
 
@@ -120,9 +83,16 @@ class SupabaseManager:
             birthday TEXT,
             birthmonth TEXT,
             birthyear TEXT,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            exclusion_reason TEXT,
+            status TEXT NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_{original_table}_row_number ON {original_table}(original_row_number);
+        CREATE INDEX IF NOT EXISTS idx_{original_table}_row_number ON {original_table}(row_id);
+        CREATE INDEX IF NOT EXISTS idx_{original_table}_original_row_number ON {original_table}(original_row_number);
+        CREATE INDEX IF NOT EXISTS idx_{original_table}_firstname ON {original_table}(firstname);
+        CREATE INDEX IF NOT EXISTS idx_{original_table}_birthday ON {original_table}(birthday);
+        CREATE INDEX IF NOT EXISTS idx_{original_table}_birthmonth ON {original_table}(birthmonth);
+        CREATE INDEX IF NOT EXISTS idx_{original_table}_birthyear ON {original_table}(birthyear);
+        CREATE INDEX IF NOT EXISTS idx_{original_table}_status ON {original_table}(status);
         """
 
         logger.info(f"Creating original table: {original_table}")
@@ -179,7 +149,7 @@ class SupabaseManager:
     # Data Retrieval
     # ---------------------------
     def get_table_data(self, table_name: str, page: int = 1, per_page: int = 100, 
-                       sort_by: str = 'original_row_number', sort_order: str = 'asc') -> Tuple[List[Dict], int]:
+                       sort_by: str = 'original_row_number', sort_order: str = 'asc', status_filter: str = None) -> Tuple[List[Dict], int]:
         """
         Get paginated data from a table with sorting.
         
@@ -236,38 +206,6 @@ class SupabaseManager:
             logger.error(f"❌ Error retrieving data from {table_name}: {e}")
             raise
 
-    # ---------------------------
-    # Parallel Inserts (Legacy - keeping for compatibility)
-    # ---------------------------
-    def insert_parallel(self, original: List[Dict], included: List[Dict], excluded: List[Dict],
-                        base_table_name: str, sheet_identifier: str):
-        """Insert all three tables in parallel."""
-        safe_table_name = base_table_name.lower().replace(' ', '_').replace('-', '_')
-        original_table = f"{safe_table_name}_{sheet_identifier}_original"
-        included_table = f"{safe_table_name}_{sheet_identifier}_included"
-        excluded_table = f"{safe_table_name}_{sheet_identifier}_excluded"
-
-        logger.info("Starting parallel inserts...")
-        start_time = time.time()
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = []
-            if original:
-                futures.append(executor.submit(self.append_data, original_table, original))
-            if included:
-                futures.append(executor.submit(self.append_data, included_table, included))
-            if excluded:
-                futures.append(executor.submit(self.append_data, excluded_table, excluded))
-
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    logger.error(f"❌ Error in parallel insert: {e}")
-                    raise
-
-        total_time = time.time() - start_time
-        logger.info(f"✅ Parallel inserts completed in {total_time:.2f}s")
 
     # =========================
     # COUNT METHODS
@@ -288,41 +226,17 @@ class SupabaseManager:
         """Check if tables exist and return row counts"""
         try:
             safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
-            included_table = f"{safe_table_name}_{sheet_identifier}_included"
-            excluded_table = f"{safe_table_name}_{sheet_identifier}_excluded"
             original_table = f"{safe_table_name}_{sheet_identifier}_original"
         
             result = {
                 'exists': False,
                 'counts': {
                     'original': 0,
-                    'included': 0,
-                    'excluded': 0
                 }
             }
-        
+            
             # Check if tables exist and get counts
             with self.conn.cursor() as cur:
-                # Check included table
-                cur.execute(f"""
-                    SELECT COUNT(*) FROM information_schema.tables 
-                    WHERE table_name = '{included_table}'
-                """)
-                
-                if cur.fetchone()[0] > 0:
-                    cur.execute(f"SELECT COUNT(*) FROM {included_table}")
-                    result['counts']['included'] = cur.fetchone()[0]
-                    result['exists'] = True
-            
-                # Check excluded table
-                cur.execute(f"""
-                    SELECT COUNT(*) FROM information_schema.tables 
-                    WHERE table_name = '{excluded_table}'
-                """)
-                
-                if cur.fetchone()[0] > 0:
-                    cur.execute(f"SELECT COUNT(*) FROM {excluded_table}")
-                    result['counts']['excluded'] = cur.fetchone()[0]
             
                 # Check original table
                 cur.execute(f"""
