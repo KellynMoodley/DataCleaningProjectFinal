@@ -301,11 +301,24 @@ def download_table(sheet_key, table_type, format):
     try:
         init_supabase()
         safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
-        table_name = f"{safe_table_name}_{sheet['identifier']}_{table_type}"
+        # Always use the _original table
+        original_table = f"{safe_table_name}_{sheet['identifier']}_original"
         
-        # Fetch ALL data (no pagination)
+        # Define columns and WHERE clause based on table_type
+        if table_type == 'included':
+            columns_select = "original_row_number, row_id, firstname, birthday, birthmonth, birthyear"
+            where_clause = "WHERE status = 'included'"
+        elif table_type == 'excluded':
+            columns_select = "original_row_number, row_id, firstname, birthday, birthmonth, birthyear, exclusion_reason"
+            where_clause = "WHERE status = 'excluded'"
+        else:  # original
+            columns_select = "*"
+            where_clause = ""
+        
+        # Fetch ALL data (no pagination) with status filter
         with supabase_manager.conn.cursor() as cur:
-            cur.execute(f"SELECT * FROM {table_name} ORDER BY original_row_number ASC")
+            sql = f"SELECT {columns_select} FROM {original_table} {where_clause} ORDER BY original_row_number ASC"
+            cur.execute(sql)
             columns = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
         
