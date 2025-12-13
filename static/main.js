@@ -756,34 +756,69 @@ function loadCommonNames() {
                 return;
             }
             
-            // Render the names
+            // Render the data with frequencies
             let html = `
                 <div style="padding: 20px;">
                     <div class="stats" style="margin-bottom: 20px;">
                         <div class="stat-item">
                             <div class="stat-label">Number of Names</div>
-                            <div class="stat-value">${data.name_count.toLocaleString()}</div>
+                            <div class="stat-value">${data.summary.total_names.toLocaleString()}</div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-label">Records Covered</div>
-                            <div class="stat-value">${data.record_count.toLocaleString()}</div>
+                            <div class="stat-value">${data.summary.coverage_count.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Total Records</div>
+                            <div class="stat-value">${data.summary.total_records.toLocaleString()}</div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-label">Coverage</div>
                             <div class="stat-value">80%</div>
                         </div>
                     </div>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
-                        <h3 style="margin-top: 0;">Names List:</h3>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">
+                    
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <button onclick="downloadCommonNames('csv')" style="background-color: #27ae60; padding: 10px 20px; border: none; color: white; border-radius: 6px; cursor: pointer;">
+                            📥 Download CSV
+                        </button>
+                        <button onclick="downloadCommonNames('json')" style="background-color: #3498db; padding: 10px 20px; border: none; color: white; border-radius: 6px; cursor: pointer;">
+                            📥 Download JSON
+                        </button>
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: #34495e; color: white;">
+                                    <th style="padding: 12px; text-align: left;">Rank</th>
+                                    <th style="padding: 12px; text-align: left;">Name</th>
+                                    <th style="padding: 12px; text-align: right;">Frequency</th>
+                                    <th style="padding: 12px; text-align: right;">Percentage</th>
+                                    <th style="padding: 12px; text-align: right;">Cumulative Count</th>
+                                    <th style="padding: 12px; text-align: right;">Cumulative %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
             `;
             
-            data.names.forEach(name => {
-                html += `<div style="padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #3498db;">${escapeHtml(name)}</div>`;
+            data.names.forEach((row, index) => {
+                const bgColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                html += `
+                    <tr style="background: ${bgColor}; border-bottom: 1px solid #ecf0f1;">
+                        <td style="padding: 10px;">${row.rank}</td>
+                        <td style="padding: 10px; font-weight: 500;">${escapeHtml(row.firstname)}</td>
+                        <td style="padding: 10px; text-align: right;">${row.frequency.toLocaleString()}</td>
+                        <td style="padding: 10px; text-align: right;">${row.percentage_of_total}%</td>
+                        <td style="padding: 10px; text-align: right;">${row.cumulative_count.toLocaleString()}</td>
+                        <td style="padding: 10px; text-align: right;">${row.cumulative_percentage}%</td>
+                    </tr>
+                `;
             });
             
             html += `
-                        </div>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             `;
@@ -794,6 +829,27 @@ function loadCommonNames() {
             console.error('Error loading common names:', error);
             container.innerHTML = `<p style="color: #e74c3c;">Failed to load common names</p>`;
         });
+}
+
+function downloadCommonNames(format) {
+    if (!currentSheet) {
+        alert('Please select a sheet first');
+        return;
+    }
+    
+    // Show loading state
+    const statusMessage = document.createElement('div');
+    statusMessage.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #3498db; color: white; padding: 15px 20px; border-radius: 8px; z-index: 9999;';
+    statusMessage.textContent = `Generating ${format.toUpperCase()}... Please wait.`;
+    document.body.appendChild(statusMessage);
+    
+    // Trigger download
+    window.location.href = `/analytics/${currentSheet}/common_names/download/${format}`;
+    
+    // Remove status message after delay
+    setTimeout(() => {
+        statusMessage.remove();
+    }, 3000);
 }
 
 // Check table status on page load

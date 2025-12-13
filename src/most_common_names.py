@@ -100,21 +100,21 @@ class MostCommonNamesExporter:
                     'sheet_name': sheet_info.get('display_name', 'Unknown'),
                     'sheet_identifier': sheet_info.get('identifier', 'unknown'),
                     'total_names': len(data),
-                    'total_records': data[0].get('total_records', 0) if data else 0,
+                    'total_records': int(data[0].get('total_records', 0)) if data else 0,
                     'coverage': '80% of included records'
                 },
                 'common_names': []
             }
             
-            # Add data
+            # Add data - convert Decimal to float
             for row in data:
                 json_output['common_names'].append({
-                    'rank': row.get('rank'),
+                    'rank': int(row.get('rank', 0)),
                     'name': row.get('firstname'),
-                    'frequency': row.get('frequency'),
-                    'percentage_of_total': float(row.get('percentage_of_total', 0)),
-                    'cumulative_count': row.get('cumulative_count'),
-                    'cumulative_percentage': float(row.get('cumulative_percentage', 0))
+                    'frequency': int(row.get('frequency', 0)),
+                    'percentage_of_total': float(row.get('percentage_of_total', 0)),  # Convert Decimal
+                    'cumulative_count': int(row.get('cumulative_count', 0)),
+                    'cumulative_percentage': float(row.get('cumulative_percentage', 0))  # Convert Decimal
                 })
             
             # Convert to JSON string

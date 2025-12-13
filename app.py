@@ -11,7 +11,7 @@ import uuid
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src import DataCleaner, SupabaseManager, ReportGenerator, DataAnalytics, DB_CONFIG
+from src import DataCleaner, SupabaseManager, ReportGenerator, DataAnalytics, MostCommonNamesExporter, DB_CONFIG
 
 # Google Sheets setup
 SERVICE_ACCOUNT_FILE = "service_account.json"
@@ -386,6 +386,7 @@ def create_analytics(sheet_key):
             analytics.create_analytics_table('clients_2025', sheet['identifier'])
             analytics.create_duplicate_groups_view('clients_2025', sheet['identifier'])
             analytics.create_visualization_tables('clients_2025', sheet['identifier'])
+            analytics.create_common_names_table('clients_2025', sheet['identifier'])  # Add this line
             
             logger.info(f"✅ Analytics created successfully for {sheet_key}")
             return jsonify({'success': True, 'message': 'Analytics created successfully'})
@@ -517,7 +518,84 @@ def get_chart_data(sheet_key, chart_type):
     except Exception as e:
         logger.error(f"Error getting chart data: {str(e)}")
         return jsonify({'error': str(e)}), 500
+ 
+@app.route('/analytics/<sheet_key>/common_names')    
+def get_common_names(sheet_key):
+    """Get top 80% most common names with frequencies"""
+    try:
+        sheet = SHEETS_CONFIG.get(sheet_key)
+        if not sheet:
+            return jsonify({'error': 'Invalid sheet key'}), 404
+        
+        logger.info(f"Getting common names for sheet: {sheet_key}")
+        
+        analytics = DataAnalytics(DB_CONFIG)
+        analytics.connect()
+        
+        try:
+            data = analytics.get_common_names_data('clients_2025', sheet['identifier'])
+            
+            if not data:
+                return jsonify({'error': 'No common names data found'}), 404
+            
+            # Calculate summary stats
+            total_names = len(data)
+            total_records = data[0].get('total_records', 0) if data else 0
+            coverage_count = data[-1].get('cumulative_count', 0) if data else 0
+            
+            return jsonify({
+                'names': data,
+                'summary': {
+                    'total_names': total_names,
+                    'total_records': total_records,
+                    'coverage_count': coverage_count,
+                    'coverage_percentage': 80.0
+                }
+            })
+            
+        finally:
+            analytics.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error getting common names: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
+
+@app.route('/analytics/<sheet_key>/common_names/download/<format>')
+def download_common_names(sheet_key, format):
+    """Download common names as CSV or JSON"""
+    try:
+        sheet = SHEETS_CONFIG.get(sheet_key)
+        if not sheet:
+            return jsonify({'error': 'Invalid sheet key'}), 404
+        
+        if format not in ['csv', 'json']:
+            return jsonify({'error': 'Invalid format. Use csv or json'}), 400
+        
+        logger.info(f"Downloading common names as {format} for sheet: {sheet_key}")
+        
+        analytics = DataAnalytics(DB_CONFIG)
+        analytics.connect()
+        
+        try:
+            data = analytics.get_common_names_data('clients_2025', sheet['identifier'])
+            
+            if not data:
+                return jsonify({'error': 'No common names data found'}), 404
+            
+            exporter = MostCommonNamesExporter()
+            
+            if format == 'csv':
+                return exporter.generate_csv(data, sheet)
+            else:
+                return exporter.generate_json(data, sheet)
+            
+        finally:
+            analytics.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error downloading common names: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
