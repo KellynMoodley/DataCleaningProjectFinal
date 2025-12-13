@@ -232,6 +232,8 @@ class SupabaseManager:
                 'exists': False,
                 'counts': {
                     'original': 0,
+                    'included': 0,   
+                    'excluded': 0
                 }
             }
             
@@ -244,9 +246,22 @@ class SupabaseManager:
                     WHERE table_name = '{original_table}'
                 """)
                 
-                if cur.fetchone()[0] > 0:
+                table_exists = cur.fetchone()[0]
+                logger.info(f"🔍 Table exists query returned: {table_exists}")
+                
+                if table_exists > 0:  # ✅ CORRECT - use the variable
+                    result['exists'] = True  # ADD THIS LINE TOO!
+                    
                     cur.execute(f"SELECT COUNT(*) FROM {original_table}")
                     result['counts']['original'] = cur.fetchone()[0]
+                    
+                    # Get included count
+                    cur.execute(f"SELECT COUNT(*) FROM {original_table} WHERE status = 'Included'")
+                    result['counts']['included'] = cur.fetchone()[0]
+                    
+                    # Get excluded count
+                    cur.execute(f"SELECT COUNT(*) FROM {original_table} WHERE status = 'Excluded'")
+                    result['counts']['excluded'] = cur.fetchone()[0]
         
             return result
         
