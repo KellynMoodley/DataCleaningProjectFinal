@@ -175,6 +175,7 @@ function loadTableData(tableType) {
 }
 
 // Render table
+// Render table
 function renderTable(tableType, data) {
     const container = document.getElementById(`${tableType}-table-container`);
     
@@ -183,8 +184,19 @@ function renderTable(tableType, data) {
         return;
     }
     
-    // Get column names from first row
-    const columns = Object.keys(data[0]);
+    // Define column order based on table type
+    let columns;
+    if (tableType === 'included') {
+        columns = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear'];
+    } else if (tableType === 'excluded') {
+        columns = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear', 'exclusion_reason'];
+    } else {
+        columns = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear', 'exclusion_reason', 'status'];
+    }
+    
+    // Filter columns to only include those that exist in the data
+    columns = columns.filter(col => col in data[0]);
+    
     const state = currentTableStates[tableType];
     
     // Build table HTML

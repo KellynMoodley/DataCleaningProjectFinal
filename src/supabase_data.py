@@ -150,19 +150,7 @@ class SupabaseManager:
     # ---------------------------
     def get_table_data(self, table_name: str, page: int = 1, per_page: int = 100, 
                        sort_by: str = 'original_row_number', sort_order: str = 'asc', status_filter: str = None) -> Tuple[List[Dict], int]:
-        """
-        Get paginated data from a table with sorting.
-        
-        Args:
-            table_name: Name of the table
-            page: Page number (1-indexed)
-            per_page: Number of records per page
-            sort_by: Column to sort by
-            sort_order: 'asc' or 'desc'
-        
-        Returns:
-            Tuple of (data_list, total_count)
-        """
+
         try:
             # Validate sort order
             if sort_order.lower() not in ['asc', 'desc']:
@@ -171,15 +159,27 @@ class SupabaseManager:
             # Calculate offset
             offset = (page - 1) * per_page
             
+            # Define columns based on status filter
+            if status_filter == 'included':
+                columns = "original_row_number, row_id, firstname, birthday, birthmonth, birthyear"
+            elif status_filter == 'excluded':
+                columns = "original_row_number, row_id, firstname, birthday, birthmonth, birthyear, exclusion_reason"
+            else:  # original - show all columns
+                columns = "*"
+            
+            # Build WHERE clause
+            where_clause = f"WHERE status = '{status_filter}'" if status_filter else ""
+            
             # Get total count
             with self.conn.cursor() as cur:
-                cur.execute(f"SELECT COUNT(*) FROM {table_name}")
+                cur.execute(f"SELECT COUNT(*) FROM {table_name} {where_clause}")
                 total_count = cur.fetchone()[0]
             
             # Get paginated data
             sql = f"""
-                SELECT * FROM {table_name}
-                ORDER BY {sort_by} {sort_order}
+                SELECT {columns} FROM {table_name}
+                {where_clause}
+                ORDER BY original_row_number {sort_order}, row_id {sort_order}
                 LIMIT %s OFFSET %s
             """
             
@@ -187,17 +187,31 @@ class SupabaseManager:
                 cur.execute(sql, (per_page, offset))
                 rows = cur.fetchall()
                 
-                # Convert to list of dicts and handle any datetime serialization
-                data = []
-                for row in rows:
-                    row_dict = dict(row)
-                    # Convert UUID to string if present
-                    if 'row_id' in row_dict and row_dict['row_id']:
-                        row_dict['row_id'] = str(row_dict['row_id'])
-                    # Convert datetime to ISO string if present
-                    if 'created_at' in row_dict and row_dict['created_at']:
-                        row_dict['created_at'] = row_dict['created_at'].isoformat()
-                    data.append(row_dict)
+            # Define desired column order
+                if status_filter == 'included':
+                    column_order = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear']
+                elif status_filter == 'excluded':
+                    column_order = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear', 'exclusion_reason']
+                else:
+                    column_order = None  # Keep original order for 'original' table
+                
+            # Convert to list of dicts and handle any datetime serialization
+            data = []
+            for row in rows:
+                row_dict = dict(row)
+                
+                # Convert UUID to string if present (DO THIS FIRST)
+                if 'row_id' in row_dict and row_dict['row_id']:
+                    row_dict['row_id'] = str(row_dict['row_id'])
+                # Convert datetime to ISO string if present
+                if 'created_at' in row_dict and row_dict['created_at']:
+                    row_dict['created_at'] = row_dict['created_at'].isoformat()
+                
+                # Reorder columns if needed (DO THIS LAST)
+                if column_order:
+                    row_dict = {key: row_dict[key] for key in column_order if key in row_dict}
+                
+                data.append(row_dict)
             
             logger.info(f"Retrieved {len(data)} rows from {table_name} (page {page})")
             return data, total_count

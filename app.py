@@ -235,7 +235,7 @@ def get_table_data(sheet_key, table_type):
         # Add status filter
         status_filter = ""
         if table_type in ['included', 'excluded']:
-            status_filter = f"WHERE status = '{table_type.capitalize()}'"
+            status_filter = f"WHERE status = '{table_type}'"
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
@@ -250,7 +250,7 @@ def get_table_data(sheet_key, table_type):
             per_page, 
             sort_by, 
             sort_order, 
-            table_type.capitalize() if table_type in ['included', 'excluded'] else None
+            table_type if table_type in ['included', 'excluded'] else None
         )
         
         return jsonify({
