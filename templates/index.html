@@ -372,7 +372,7 @@
                 <button class="tab active" onclick="switchTab('original')">📄 Original Data</button>
                 <button class="tab" onclick="switchTab('included')">✅ Included Data</button>
                 <button class="tab" onclick="switchTab('excluded')">❌ Excluded Data</button>
-                <button class="tab" onclick="switchTab('Analytics')">Analytics</button>
+                <button class="tab" onclick="switchTab('analytics')">📊 Analytics</button>
             </div>
 
             <div id="original-section" class="table-section show">
@@ -455,6 +455,20 @@
                 </div>
                 <div class="pagination" id="excluded-pagination"></div>
             </div>
+            <div id="analytics-section" class="table-section">
+                <h2>📊 Analytics & Insights</h2>
+                
+                <!-- Summary Cards -->
+                <div id="analytics-summary" style="margin-bottom: 30px;">
+                    <h3>Summary Statistics</h3>
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading summary...</p>
+                    </div>
+                </div>
+                
+            
+
         </div>
     </div>
 

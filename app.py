@@ -11,7 +11,7 @@ import uuid
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src import DataCleaner, SupabaseManager, ReportGenerator
+from src import DataCleaner, SupabaseManager, ReportGenerator, DataAnalytics, DB_CONFIG
 
 # Google Sheets setup
 SERVICE_ACCOUNT_FILE = "service_account.json"
@@ -368,6 +368,47 @@ def download_table(sheet_key, table_type, format):
     except Exception as e:
         logger.error(f"Error downloading table: {e}")
         return jsonify({"error": str(e)}), 500
+    
+    
+#Analytics section 
+@app.route('/analytics/<sheet_key>/summary')
+def get_analytics_summary(sheet_key):
+    """Get summary statistics for a sheet"""
+    try:
+        # Get the sheet configuration
+        sheet = SHEETS_CONFIG.get(sheet_key)
+        if not sheet:
+            return jsonify({'error': 'Invalid sheet key'}), 404
+        
+        # Construct the table name
+        safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
+        included_table = f"{safe_table_name}_{sheet['identifier']}_included"
+        
+        logger.info(f"Getting analytics for table: {included_table}")
+        
+        # Initialize analytics
+        analytics = DataAnalytics(DB_CONFIG)
+        analytics.connect()
+        
+        try:
+            # Get all summary statistics - pass the table name instead of sheet_id
+            summary_data = {
+                'unique_names': analytics.get_total_unique_names(included_table),
+                'unique_birthdays': analytics.get_unique_birthday_combinations(included_table),
+                'unique_name_year': analytics.get_unique_name_year_combinations(included_table),
+                'unique_name_month': analytics.get_unique_name_month_combinations(included_table),
+                'unique_name_day': analytics.get_unique_name_day_combinations(included_table)
+            }
+            
+            logger.info(f"Analytics summary generated for {sheet_key}: {summary_data}")
+            return jsonify(summary_data)
+            
+        finally:
+            analytics.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error generating analytics summary: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

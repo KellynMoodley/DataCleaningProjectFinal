@@ -6,7 +6,7 @@ This package contains all the core functionality for data cleaning, analytics, a
 from .supabase_data import SupabaseManager
 from .datacleaning import DataCleaner
 from .reports import ReportGenerator
-from .analytics import DataAnalytics
+from .analytics import DataAnalytics, DB_CONFIG
 
 
 __all__ = ['SupabaseManager', 'DataCleaner', 'ReportGenerator', 'DataAnalytics']

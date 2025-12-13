@@ -116,12 +116,16 @@ function switchTab(tableType) {
     document.querySelectorAll('.table-section').forEach(section => {
         section.classList.remove('show');
     });
-    
-    // Show selected section
-    document.getElementById(`${tableType}-section`).classList.add('show');
-    
-    // Load data if not already loaded or if first time
-    loadTableData(tableType);
+
+    //analytics
+    if (tableType === 'analytics') {
+        document.getElementById('analytics-section').classList.add('show');
+        loadAnalyticsData();  // New function
+    } else {
+        document.getElementById(`${tableType}-section`).classList.add('show');
+        loadTableData(tableType);
+    }
+
 }
 
 // Load table data
@@ -309,6 +313,76 @@ function downloadTable(tableType, format) {
         statusMessage.remove();
     }, 3000);
 }
+
+
+//analytics section 
+function loadAnalyticsData() {
+    if (!currentSheet) return;
+    
+    // Load summary first (fast)
+    loadAnalyticsSummary();
+    
+    // Load distributions (medium speed)
+    loadAnalyticsDistributions();
+    
+    // Load duplicates last (slow)
+    loadAnalyticsDuplicates();
+}
+
+function loadAnalyticsSummary() {
+    const container = document.getElementById('analytics-summary');
+    
+    console.log('[Analytics] Starting summary fetch...');
+    const startTime = performance.now();
+    
+    fetch(`/analytics/${currentSheet}/summary`)
+        .then(response => {
+            const fetchTime = performance.now() - startTime;
+            console.log(`[Analytics] Summary fetch completed in ${fetchTime.toFixed(0)}ms`);
+            return response.json();
+        })
+        .then(data => {
+            const totalTime = performance.now() - startTime;
+            console.log(`[Analytics] Summary fully loaded in ${totalTime.toFixed(0)}ms`);
+            
+            if (data.error) {
+                container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
+                return;
+            }
+            
+            container.innerHTML = `
+                <h3>Summary Statistics</h3>
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-label">Unique Names</div>
+                        <div class="stat-value">${data.unique_names.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Unique Birthdays</div>
+                        <div class="stat-value">${data.unique_birthdays.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Unique Name + Year</div>
+                        <div class="stat-value">${data.unique_name_year.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Unique Name + Month</div>
+                        <div class="stat-value">${data.unique_name_month.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Unique Name + Day</div>
+                        <div class="stat-value">${data.unique_name_day.toLocaleString()}</div>
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            const totalTime = performance.now() - startTime;
+            console.error(`[Analytics] Summary failed after ${totalTime.toFixed(0)}ms:`, error);
+            container.innerHTML = `<p style="color: #e74c3c;">Error loading summary</p>`;
+        });
+}
+
 
 // Check table status on page load
 document.addEventListener('DOMContentLoaded', function() {
