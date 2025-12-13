@@ -106,11 +106,12 @@ function viewSheetData(sheetKey) {
 
 // Switch between tabs
 function switchTab(tableType) {
-    // Update tab active state
-    document.querySelectorAll('.tabs > .tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    event.target.classList.add('active');
+    // Update tab active state for main tabs only
+    const mainTabs = document.querySelectorAll('.tabs > .tab');
+    mainTabs.forEach(tab => tab.classList.remove('active'));
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
     
     // Hide all sections
     document.querySelectorAll('.table-section').forEach(section => {
@@ -183,7 +184,6 @@ function loadTableData(tableType) {
     });
 }
 
-// Render table
 // Render table
 function renderTable(tableType, data) {
     const container = document.getElementById(`${tableType}-table-container`);
@@ -398,7 +398,6 @@ function loadAnalyticsSummary() {
     
     // Show loading
     container.innerHTML = `
-        <h3>Summary Statistics</h3>
         <div class="loading">
             <div class="spinner"></div>
             <p>Loading summary...</p>
@@ -410,7 +409,6 @@ function loadAnalyticsSummary() {
         .then(data => {
             if (data.error) {
                 container.innerHTML = `
-                    <h3>Summary Statistics</h3>
                     <p style="color: #e74c3c;">Error: ${data.error}</p>
                 `;
                 return;
@@ -418,7 +416,6 @@ function loadAnalyticsSummary() {
             
             // Render summary cards
             container.innerHTML = `
-                <h3>Summary Statistics</h3>
                 <div class="stats">
                     <div class="stat-item">
                         <div class="stat-label">Unique Names</div>
@@ -446,11 +443,13 @@ function loadAnalyticsSummary() {
         .catch(error => {
             console.error('Error loading analytics summary:', error);
             container.innerHTML = `
-                <h3>Summary Statistics</h3>
                 <p style="color: #e74c3c;">Failed to load summary data</p>
             `;
         });
 }
+
+// Global chart instance
+let chartInstance = null;
 
 // State for duplicates
 let currentDuplicatesState = {
@@ -458,6 +457,7 @@ let currentDuplicatesState = {
     page: 1,
     perPage: 50
 };
+
 
 function loadAnalyticsDistributions() {
     // Load default chart
@@ -475,10 +475,12 @@ function loadDuplicates(groupType) {
     currentDuplicatesState.groupType = groupType;
     currentDuplicatesState.page = 1;
     
-    // Update tab active state
-    const duplicateTabs = document.querySelectorAll('#analytics-duplicates .tab');
+    // Update tab active state for duplicate tabs
+    const duplicateTabs = document.querySelectorAll('#duplicates-section .tabs .tab');
     duplicateTabs.forEach(tab => tab.classList.remove('active'));
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
     
     fetchDuplicates();
 }
@@ -520,28 +522,28 @@ function fetchDuplicates() {
 function renderDuplicates(duplicates, groupType) {
     const container = document.getElementById('duplicates-container');
     
-    let html = '<div style="margin-top: 20px;">';
+    if (!duplicates || duplicates.length === 0) {
+        container.innerHTML = `<p style="text-align: center; padding: 20px; color: #7f8c8d;">No duplicates found</p>`;
+        return;
+    }
+    
+    let html = '<div style="padding: 20px;">';
     
     duplicates.forEach(dup => {
-        html += `
-            <div style="background: #f8f9fa; border-left: 4px solid #e74c3c; padding: 16px; margin-bottom: 16px; border-radius: 4px;">
-                <div style="font-weight: 600; margin-bottom: 8px; color: #2c3e50;">
-        `;
+        let label = '';
         
         if (groupType === 'name_year') {
-            html += `${escapeHtml(dup.firstname)} - ${dup.birthyear} <span style="color: #e74c3c;">(${dup.duplicate_count} records)</span>`;
+            label = `${escapeHtml(dup.firstname)} - ${dup.birthyear}`;
         } else if (groupType === 'name_month') {
-            html += `${escapeHtml(dup.firstname)} - Month ${dup.birthmonth} <span style="color: #e74c3c;">(${dup.duplicate_count} records)</span>`;
+            label = `${escapeHtml(dup.firstname)} - Month ${dup.birthmonth}`;
         } else if (groupType === 'name_day') {
-            html += `${escapeHtml(dup.firstname)} - Day ${dup.birthday} <span style="color: #e74c3c;">(${dup.duplicate_count} records)</span>`;
+            label = `${escapeHtml(dup.firstname)} - Day ${dup.birthday}`;
         }
         
         html += `
-                </div>
-                <div style="font-size: 0.9rem; color: #7f8c8d;">
-                    <strong>Original Rows:</strong> ${dup.original_row_numbers.join(', ')}<br>
-                    <strong>Record IDs:</strong> ${dup.row_ids.join(', ')}
-                </div>
+            <div style="padding: 12px 0; border-bottom: 1px solid #ecf0f1;">
+                <span style="font-weight: 500; color: #2c3e50;">${label}</span>
+                <span style="color: #e74c3c; margin-left: 12px;">(${dup.duplicate_count} duplicates)</span>
             </div>
         `;
     });
@@ -581,13 +583,16 @@ function goToDuplicatesPage(page) {
 function loadChart(chartType) {
     if (!currentSheet) return;
     
-    // Update tab active state
-    const chartTabs = document.querySelectorAll('#analytics-charts .tab');
+    // Update tab active state for chart tabs
+    const chartTabs = document.querySelectorAll('#charts-section .tabs .tab');
     chartTabs.forEach(tab => tab.classList.remove('active'));
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
     
     const container = document.getElementById('chart-container');
     
+    // Show loading
     container.innerHTML = `
         <div class="loading">
             <div class="spinner"></div>
@@ -603,6 +608,8 @@ function loadChart(chartType) {
                 return;
             }
             
+            // Restore canvas
+            container.innerHTML = '<canvas id="analytics-chart" style="max-height: 400px;"></canvas>';
             renderChart(data.data, chartType);
         })
         .catch(error => {
@@ -612,38 +619,109 @@ function loadChart(chartType) {
 }
 
 function renderChart(data, chartType) {
-    const container = document.getElementById('chart-container');
+    const canvas = document.getElementById('analytics-chart');
     
     if (!data || data.length === 0) {
+        const container = document.getElementById('chart-container');
         container.innerHTML = `<p style="text-align: center; padding: 20px; color: #7f8c8d;">No data available</p>`;
         return;
     }
     
-    // Simple bar chart visualization
-    let html = '<div style="margin-top: 20px;">';
+    // Destroy existing chart if it exists
+    if (chartInstance) {
+        chartInstance.destroy();
+    }
     
-    const maxCount = Math.max(...data.map(d => d.count));
-    
-    data.forEach(item => {
-        const percentage = (item.count / maxCount) * 100;
-        const label = chartType === 'birthyear' ? item.birthyear : `Month ${item.birthmonth}`;
-        
-        html += `
-            <div style="margin-bottom: 12px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                    <span style="font-weight: 500;">${label}</span>
-                    <span style="color: #7f8c8d;">${item.count.toLocaleString()}</span>
-                </div>
-                <div style="background: #ecf0f1; border-radius: 4px; height: 24px; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #3498db, #2980b9); height: 100%; width: ${percentage}%; transition: width 0.3s;"></div>
-                </div>
-            </div>
-        `;
+    // Prepare data for Chart.js
+    const labels = data.map(item => {
+        if (chartType === 'birthyear') {
+            return item.birthyear.toString();
+        } else {
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return monthNames[item.birthmonth - 1];
+        }
     });
     
-    html += '</div>';
-    container.innerHTML = html;
+    const counts = data.map(item => item.count);
+    
+    // Create new chart
+    const ctx = canvas.getContext('2d');
+    chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: chartType === 'birthyear' ? 'Records by Birth Year' : 'Records by Birth Month',
+                data: counts,
+                backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 2,
+                borderRadius: 4,
+                hoverBackgroundColor: 'rgba(52, 152, 219, 0.8)',
+                hoverBorderColor: 'rgba(41, 128, 185, 1)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        font: {
+                            size: 14
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y.toLocaleString() + ' records';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0,
+                        callback: function(value) {
+                            return value.toLocaleString();
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Number of Records',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: chartType === 'birthyear' ? 'Birth Year' : 'Birth Month',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
 }
+
 
 // Check table status on page load
 document.addEventListener('DOMContentLoaded', function() {
