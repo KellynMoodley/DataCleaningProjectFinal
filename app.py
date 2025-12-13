@@ -275,11 +275,27 @@ def check_tables(sheet_key):
     try:
         init_supabase()
         result = supabase_manager.check_tables_exist('clients_2025', sheet['identifier'])
+        
+        # Check if analytics table exists
+        safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
+        analytics_table = f"{safe_table_name}_{sheet['identifier']}_analytics"
+        
+        analytics_exists = False
+        with supabase_manager.conn.cursor() as cur:
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = %s
+                )
+            """, (analytics_table,))
+            analytics_exists = cur.fetchone()[0]
+        
         return jsonify({
             "success": True,
             "sheet_key": sheet_key,
             "exists": result['exists'],
-            "counts": result['counts']
+            "counts": result['counts'],
+            "analytics_exists": analytics_exists
         })
     except Exception as e:
         logger.error(f"Error checking tables for {sheet_key}: {e}")
@@ -349,37 +365,67 @@ def download_table(sheet_key, table_type, format):
     
     
 #Analytics section 
-@app.route('/analytics/<sheet_key>/summary')
-def get_analytics_summary(sheet_key):
-    """Get summary statistics for a sheet"""
+@app.route('/analytics/<sheet_key>/create', methods=['POST'])
+def create_analytics(sheet_key):
+    """Create analytics tables for a sheet"""
     try:
-        # Get the sheet configuration
         sheet = SHEETS_CONFIG.get(sheet_key)
         if not sheet:
             return jsonify({'error': 'Invalid sheet key'}), 404
         
-        # Construct the table name
-        safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
-        original_table = f"{safe_table_name}_{sheet['identifier']}_original"
-        
-        logger.info(f"Getting analytics for table: {original_table}")
+        logger.info(f"Creating analytics for sheet: {sheet_key}")
         
         # Initialize analytics
         analytics = DataAnalytics(DB_CONFIG)
         analytics.connect()
         
         try:
-            # Get all summary statistics - pass the table name instead of sheet_id
-            summary_data = {
-                'unique_names': analytics.get_total_unique_names(original_table),
-                'unique_birthdays': analytics.get_unique_birthday_combinations(original_table),
-                'unique_name_year': analytics.get_unique_name_year_combinations(original_table),
-                'unique_name_month': analytics.get_unique_name_month_combinations(original_table),
-                'unique_name_day': analytics.get_unique_name_day_combinations(original_table)
+            # Create all analytics tables
+            analytics.create_analytics_table('clients_2025', sheet['identifier'])
+            analytics.create_duplicate_groups_view('clients_2025', sheet['identifier'])
+            analytics.create_visualization_tables('clients_2025', sheet['identifier'])
+            
+            logger.info(f"✅ Analytics created successfully for {sheet_key}")
+            return jsonify({'success': True, 'message': 'Analytics created successfully'})
+            
+        finally:
+            analytics.disconnect()
+            
+    except Exception as e:
+        logger.error(f"Error creating analytics: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/analytics/<sheet_key>/summary')
+def get_analytics_summary(sheet_key):
+    """Get summary statistics for a sheet"""
+    try:
+        sheet = SHEETS_CONFIG.get(sheet_key)
+        if not sheet:
+            return jsonify({'error': 'Invalid sheet key'}), 404
+        
+        logger.info(f"Getting analytics for sheet: {sheet_key}")
+        
+        analytics = DataAnalytics(DB_CONFIG)
+        analytics.connect()
+        
+        try:
+            # Use the existing method from DataAnalytics class
+            data = analytics.get_analytics_data('clients_2025', sheet['identifier'])
+            
+            if not data:
+                return jsonify({'error': 'No analytics data found'}), 404
+            
+            # Map database columns to frontend fields
+            summary = {
+                'unique_names': int(data.get('unique_names', 0)) if data.get('unique_names') is not None else 0,
+                'unique_birthdays': int(data.get('unique_full_birthdays', 0)) if data.get('unique_full_birthdays') is not None else 0,
+                'unique_name_year': int(data.get('unique_name_year_combinations', 0)) if data.get('unique_name_year_combinations') is not None else 0,
+                'unique_name_month': int(data.get('unique_name_month_combinations', 0)) if data.get('unique_name_month_combinations') is not None else 0,
+                'unique_name_day': int(data.get('unique_name_day_combinations', 0)) if data.get('unique_name_day_combinations') is not None else 0
             }
             
-            logger.info(f"Analytics summary generated for {sheet_key}: {summary_data}")
-            return jsonify(summary_data)
+            logger.info(f"Analytics summary: {summary}")
+            return jsonify(summary)
             
         finally:
             analytics.disconnect()

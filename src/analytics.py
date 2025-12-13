@@ -1,9 +1,19 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
-import json
 from dotenv import load_dotenv
 import os
+import logging
+from typing import List, Dict, Any, Tuple
+
+# ---------------------------
+# Logging setup
+# ---------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -50,119 +60,446 @@ class DataAnalytics:
         if self.connection:
             self.connection.close()
             print("✓ Database connection closed")
-    
-    def get_total_unique_names(self, table_name):
-        """
-        Get total count of unique names in included data.
-        
-        Args:
-            table_name: Name of the included table to analyze
             
-        Returns:
-            int: Count of unique names
-        """
-        query = f"""
-            SELECT COUNT(DISTINCT UPPER(REGEXP_REPLACE(TRIM(name), '\s+', ' ', 'g'))) as unique_names
-            FROM {table_name}
-            WHERE name IS NOT NULL
-            AND name != ''
-        """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result['unique_names']
+    def execute_sql(self, query):
+        try:
+            self.cursor.execute(query)
+            self.connection.commit()
+        except Exception as e:
+            self.connection.rollback()
+            logger.error(f"SQL execution failed: {e}")
+            raise
 
-    def get_unique_birthday_combinations(self, table_name):
-        """
-        Get count of unique birthday combinations (birth_day, birth_month, birth_year).
+    def create_analytics_table(self, table_name: str, sheet_identifier: str):
+        """Create a comprehensive analytics table for data analysis"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        original_table = f"{safe_table_name}_{sheet_identifier}_original"
+        analytics_table = f"{safe_table_name}_{sheet_identifier}_analytics"
         
-        Args:
-            table_name: Name of the included table to analyze
+        # Drop existing analytics table if it exists
+        drop_query = f"DROP TABLE IF EXISTS {analytics_table}"
+        self.execute_sql(drop_query)
+        
+        # Create comprehensive analytics table
+        create_query = f"""
+        CREATE TABLE {analytics_table} AS
+        WITH included_data AS (
+            SELECT * FROM {original_table}
+            WHERE status = 'included'
+        ),
+        name_frequencies AS (
+            SELECT 
+                firstname,
+                COUNT(*) as frequency,
+                SUM(COUNT(*)) OVER () as total_records
+            FROM included_data
+            WHERE firstname IS NOT NULL AND firstname != ''
+            GROUP BY firstname
+            ORDER BY COUNT(*) DESC
+        ),
+        cumulative_names AS (
+            SELECT 
+                firstname,
+                frequency,
+                total_records,
+                SUM(frequency) OVER (ORDER BY frequency DESC, firstname) as cumulative_count,
+                (SUM(frequency) OVER (ORDER BY frequency DESC, firstname))::float / total_records as cumulative_percentage
+            FROM name_frequencies
+        ),
+        top_80_names AS (
+            SELECT 
+                COUNT(*) as count_of_top_names,
+                SUM(frequency) as count_covered_by_top_names,
+                ARRAY_AGG(firstname ORDER BY frequency DESC) as top_names_list
+            FROM cumulative_names
+            WHERE cumulative_percentage <= 0.80
+        ),
+        duplicate_analysis AS (
+            SELECT
+                -- Name + Year duplicates
+                COUNT(*) FILTER (
+                    WHERE (firstname, birthyear) IN (
+                        SELECT firstname, birthyear
+                        FROM included_data
+                        WHERE firstname IS NOT NULL AND firstname != '' 
+                        AND birthyear IS NOT NULL
+                        GROUP BY firstname, birthyear
+                        HAVING COUNT(*) > 1
+                    )
+                ) as duplicates_name_year,
+                
+                -- Name + Month duplicates
+                COUNT(*) FILTER (
+                    WHERE (firstname, birthmonth) IN (
+                        SELECT firstname, birthmonth
+                        FROM included_data
+                        WHERE firstname IS NOT NULL AND firstname != '' 
+                        AND birthmonth IS NOT NULL
+                        GROUP BY firstname, birthmonth
+                        HAVING COUNT(*) > 1
+                    )
+                ) as duplicates_name_month,
+                
+                -- Name + Day duplicates
+                COUNT(*) FILTER (
+                    WHERE (firstname, birthday) IN (
+                        SELECT firstname, birthday
+                        FROM included_data
+                        WHERE firstname IS NOT NULL AND firstname != '' 
+                        AND birthday IS NOT NULL
+                        GROUP BY firstname, birthday
+                        HAVING COUNT(*) > 1
+                    )
+                ) as duplicates_name_day,
+                
+                -- Year + Month duplicates
+                COUNT(*) FILTER (
+                    WHERE (birthyear, birthmonth) IN (
+                        SELECT birthyear, birthmonth
+                        FROM included_data
+                        WHERE birthyear IS NOT NULL 
+                        AND birthmonth IS NOT NULL
+                        GROUP BY birthyear, birthmonth
+                        HAVING COUNT(*) > 1
+                    )
+                ) as duplicates_year_month,
+                
+                -- Year + Day duplicates
+                COUNT(*) FILTER (
+                    WHERE (birthyear, birthday) IN (
+                        SELECT birthyear, birthday
+                        FROM included_data
+                        WHERE birthyear IS NOT NULL 
+                        AND birthday IS NOT NULL
+                        GROUP BY birthyear, birthday
+                        HAVING COUNT(*) > 1
+                    )
+                ) as duplicates_year_day,
+                
+                -- Month + Day duplicates
+                COUNT(*) FILTER (
+                    WHERE (birthmonth, birthday) IN (
+                        SELECT birthmonth, birthday
+                        FROM included_data
+                        WHERE birthmonth IS NOT NULL 
+                        AND birthday IS NOT NULL
+                        GROUP BY birthmonth, birthday
+                        HAVING COUNT(*) > 1
+                    )
+                ) as duplicates_month_day,
+                
+                -- Total records with ANY 2-field duplicate
+                COUNT(DISTINCT row_id) FILTER (
+                    WHERE 
+                        -- Name + Year match
+                        (firstname, birthyear) IN (
+                            SELECT firstname, birthyear
+                            FROM included_data
+                            WHERE firstname IS NOT NULL AND firstname != '' 
+                            AND birthyear IS NOT NULL
+                            GROUP BY firstname, birthyear
+                            HAVING COUNT(*) > 1
+                        )
+                        OR
+                        -- Name + Month match
+                        (firstname, birthmonth) IN (
+                            SELECT firstname, birthmonth
+                            FROM included_data
+                            WHERE firstname IS NOT NULL AND firstname != '' 
+                            AND birthmonth IS NOT NULL
+                            GROUP BY firstname, birthmonth
+                            HAVING COUNT(*) > 1
+                        )
+                        OR
+                        -- Name + Day match
+                        (firstname, birthday) IN (
+                            SELECT firstname, birthday
+                            FROM included_data
+                            WHERE firstname IS NOT NULL AND firstname != '' 
+                            AND birthday IS NOT NULL
+                            GROUP BY firstname, birthday
+                            HAVING COUNT(*) > 1
+                        )
+                        OR
+                        -- Year + Month match
+                        (birthyear, birthmonth) IN (
+                            SELECT birthyear, birthmonth
+                            FROM included_data
+                            WHERE birthyear IS NOT NULL 
+                            AND birthmonth IS NOT NULL
+                            GROUP BY birthyear, birthmonth
+                            HAVING COUNT(*) > 1
+                        )
+                        OR
+                        -- Year + Day match
+                        (birthyear, birthday) IN (
+                            SELECT birthyear, birthday
+                            FROM included_data
+                            WHERE birthyear IS NOT NULL 
+                            AND birthday IS NOT NULL
+                            GROUP BY birthyear, birthday
+                            HAVING COUNT(*) > 1
+                        )
+                        OR
+                        -- Month + Day match
+                        (birthmonth, birthday) IN (
+                            SELECT birthmonth, birthday
+                            FROM included_data
+                            WHERE birthmonth IS NOT NULL 
+                            AND birthday IS NOT NULL
+                            GROUP BY birthmonth, birthday
+                            HAVING COUNT(*) > 1
+                        )
+                ) as total_records_with_any_duplicate
+            FROM included_data
+        )
+        SELECT 
+            -- Basic counts
+            (SELECT COUNT(*) FROM included_data) as total_included_records,
             
-        Returns:
-            int: Count of unique birthday triplets
+            -- Uniqueness metrics
+            COUNT(DISTINCT firstname) as unique_names,
+            COUNT(DISTINCT (birthyear, birthmonth, birthday)) FILTER (
+                WHERE birthyear IS NOT NULL 
+                AND birthmonth IS NOT NULL 
+                AND birthday IS NOT NULL
+            ) as unique_full_birthdays,
+            
+            -- Unique combinations
+            COUNT(DISTINCT (firstname, birthyear)) FILTER (
+                WHERE firstname IS NOT NULL AND firstname != '' 
+                AND birthyear IS NOT NULL
+            ) as unique_name_year_combinations,
+            COUNT(DISTINCT (firstname, birthmonth)) FILTER (
+                WHERE firstname IS NOT NULL AND firstname != '' 
+                AND birthmonth IS NOT NULL
+            ) as unique_name_month_combinations,
+            COUNT(DISTINCT (firstname, birthday)) FILTER (
+                WHERE firstname IS NOT NULL AND firstname != '' 
+                AND birthday IS NOT NULL
+            ) as unique_name_day_combinations,
+            
+            -- Duplicate counts (records involved in duplicates)
+            (SELECT duplicates_name_year FROM duplicate_analysis) as duplicate_count_name_year,
+            (SELECT duplicates_name_month FROM duplicate_analysis) as duplicate_count_name_month,
+            (SELECT duplicates_name_day FROM duplicate_analysis) as duplicate_count_name_day,
+            (SELECT duplicates_year_month FROM duplicate_analysis) as duplicate_count_year_month,
+            (SELECT duplicates_year_day FROM duplicate_analysis) as duplicate_count_year_day,
+            (SELECT duplicates_month_day FROM duplicate_analysis) as duplicate_count_month_day,
+            (SELECT total_records_with_any_duplicate FROM duplicate_analysis) as total_duplicate_records,
+            
+            -- Top 80% name analysis
+            (SELECT count_of_top_names FROM top_80_names) as top_80_percent_name_count,
+            (SELECT count_covered_by_top_names FROM top_80_names) as top_80_percent_record_count,
+            (SELECT top_names_list FROM top_80_names) as top_80_percent_names,
+            
+            -- Metadata
+            NOW() as calculated_at
+        FROM included_data;
         """
-        query = f"""
-            SELECT COUNT(*) as unique_birthdays
-            FROM (
-                SELECT DISTINCT birth_day, birth_month, birth_year
-                FROM {table_name}
-                WHERE birth_day IS NOT NULL
-                AND birth_month IS NOT NULL
-                AND birth_year IS NOT NULL
-            ) as unique_combos
-        """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result['unique_birthdays']
+        
+        logger.info(f"Creating analytics table: {analytics_table}")
+        self.execute_sql(create_query)
+        logger.info(f"✅ Analytics table created successfully")
 
-    def get_unique_name_year_combinations(self, table_name):
-        """
-        Get count of unique name + birth_year combinations.
-        
-        Args:
-            table_name: Name of the included table to analyze
-            
-        Returns:
-            int: Count of unique name+year combinations
-        """
-        query = f"""
-            SELECT COUNT(*) as unique_combos
-            FROM (
-                SELECT DISTINCT LOWER(TRIM(name)) as name, birth_year
-                FROM {table_name}
-                WHERE name IS NOT NULL
-                AND name != ''
-                AND birth_year IS NOT NULL
-            ) as unique_combos
-        """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result['unique_combos']
 
-    def get_unique_name_month_combinations(self, table_name):
-        """
-        Get count of unique name + birth_month combinations.
+    def create_duplicate_groups_view(self, table_name: str, sheet_identifier: str):
+        """Create views to show duplicate record groups"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        original_table = f"{safe_table_name}_{sheet_identifier}_original"
         
-        Args:
-            table_name: Name of the included table to analyze
-            
-        Returns:
-            int: Count of unique name+month combinations
+        # Create view for name + year duplicates
+        view_name_year = f"{safe_table_name}_{sheet_identifier}_duplicates_name_year"
+        self.execute_sql(f"DROP VIEW IF EXISTS {view_name_year}")
+        
+        create_view_query = f"""
+        CREATE VIEW {view_name_year} AS
+        SELECT 
+            firstname,
+            birthyear,
+            COUNT(*) as duplicate_count,
+            ARRAY_AGG(row_id::text ORDER BY original_row_number) as row_ids,
+            ARRAY_AGG(original_row_number ORDER BY original_row_number) as original_row_numbers,
+            ARRAY_AGG(birthday ORDER BY original_row_number) as birthdays,
+            ARRAY_AGG(birthmonth ORDER BY original_row_number) as birthmonths
+        FROM {original_table}
+        WHERE status = 'included'
+        AND firstname IS NOT NULL AND firstname != ''
+        AND birthyear IS NOT NULL
+        GROUP BY firstname, birthyear
+        HAVING COUNT(*) > 1
+        ORDER BY duplicate_count DESC, firstname, birthyear;
         """
-        query = f"""
-            SELECT COUNT(*) as unique_combos
-            FROM (
-                SELECT DISTINCT LOWER(TRIM(name)) as name, birth_month
-                FROM {table_name}
-                WHERE name IS NOT NULL
-                AND name != ''
-                AND birth_month IS NOT NULL
-            ) as unique_combos
+        self.execute_sql(create_view_query)
+        logger.info(f"✅ Created duplicate group view: {view_name_year}")
+        
+        # Create view for name + month duplicates
+        view_name_month = f"{safe_table_name}_{sheet_identifier}_duplicates_name_month"
+        self.execute_sql(f"DROP VIEW IF EXISTS {view_name_month}")
+        
+        create_view_query = f"""
+        CREATE VIEW {view_name_month} AS
+        SELECT 
+            firstname,
+            birthmonth,
+            COUNT(*) as duplicate_count,
+            ARRAY_AGG(row_id::text ORDER BY original_row_number) as row_ids,
+            ARRAY_AGG(original_row_number ORDER BY original_row_number) as original_row_numbers,
+            ARRAY_AGG(birthday ORDER BY original_row_number) as birthdays,
+            ARRAY_AGG(birthyear ORDER BY original_row_number) as birthyears
+        FROM {original_table}
+        WHERE status = 'included'
+        AND firstname IS NOT NULL AND firstname != ''
+        AND birthmonth IS NOT NULL
+        GROUP BY firstname, birthmonth
+        HAVING COUNT(*) > 1
+        ORDER BY duplicate_count DESC, firstname, birthmonth;
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result['unique_combos']
+        self.execute_sql(create_view_query)
+        logger.info(f"✅ Created duplicate group view: {view_name_month}")
+        
+        # Create view for name + day duplicates
+        view_name_day = f"{safe_table_name}_{sheet_identifier}_duplicates_name_day"
+        self.execute_sql(f"DROP VIEW IF EXISTS {view_name_day}")
+        
+        create_view_query = f"""
+        CREATE VIEW {view_name_day} AS
+        SELECT 
+            firstname,
+            birthday,
+            COUNT(*) as duplicate_count,
+            ARRAY_AGG(row_id::text ORDER BY original_row_number) as row_ids,
+            ARRAY_AGG(original_row_number ORDER BY original_row_number) as original_row_numbers,
+            ARRAY_AGG(birthmonth ORDER BY original_row_number) as birthmonths,
+            ARRAY_AGG(birthyear ORDER BY original_row_number) as birthyears
+        FROM {original_table}
+        WHERE status = 'included'
+        AND firstname IS NOT NULL AND firstname != ''
+        AND birthday IS NOT NULL
+        GROUP BY firstname, birthday
+        HAVING COUNT(*) > 1
+        ORDER BY duplicate_count DESC, firstname, birthday;
+        """
+        self.execute_sql(create_view_query)
+        logger.info(f"✅ Created duplicate group view: {view_name_day}")
 
-    def get_unique_name_day_combinations(self, table_name):
-        """
-        Get count of unique name + birth_day combinations.
+
+    def create_visualization_tables(self, table_name: str, sheet_identifier: str):
+        """Create tables for visualization data (birth year and birth month distributions)"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        original_table = f"{safe_table_name}_{sheet_identifier}_original"
         
-        Args:
-            table_name: Name of the included table to analyze
+        # Birth year distribution
+        birthyear_chart_table = f"{safe_table_name}_{sheet_identifier}_chart_birthyear"
+        self.execute_sql(f"DROP TABLE IF EXISTS {birthyear_chart_table}")
+        
+        birthyear_query = f"""
+        CREATE TABLE {birthyear_chart_table} AS
+        SELECT 
+            birthyear,
+            COUNT(*) as count
+        FROM {original_table}
+        WHERE status = 'included'
+        AND birthyear IS NOT NULL
+        GROUP BY birthyear
+        ORDER BY birthyear;
+        """
+        self.execute_sql(birthyear_query)
+        logger.info(f"✅ Created birth year chart table: {birthyear_chart_table}")
+        
+        # Birth month distribution
+        birthmonth_chart_table = f"{safe_table_name}_{sheet_identifier}_chart_birthmonth"
+        self.execute_sql(f"DROP TABLE IF EXISTS {birthmonth_chart_table}")
+        
+        birthmonth_query = f"""
+        CREATE TABLE {birthmonth_chart_table} AS
+        SELECT 
+            birthmonth,
+            COUNT(*) as count
+        FROM {original_table}
+        WHERE status = 'included'
+        AND birthmonth IS NOT NULL
+        GROUP BY birthmonth
+        ORDER BY birthmonth;
+        """
+        self.execute_sql(birthmonth_query)
+        logger.info(f"✅ Created birth month chart table: {birthmonth_chart_table}")
+
+
+    def get_analytics_data(self, table_name: str, sheet_identifier: str) -> Dict[str, Any]:
+        """Retrieve analytics data"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        analytics_table = f"{safe_table_name}_{sheet_identifier}_analytics"
+        
+        try:
+            with self.connection.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f"SELECT * FROM {analytics_table}")
+                result = cur.fetchone()
+                
+                if result:
+                    data = dict(result)
+                    # Convert datetime to ISO string
+                    if 'calculated_at' in data and data['calculated_at']:
+                        data['calculated_at'] = data['calculated_at'].isoformat()
+                    return data
+                return {}
+        except Exception as e:
+            logger.error(f"❌ Error retrieving analytics data: {e}")
+            raise
+
+
+    def get_chart_data(self, table_name: str, sheet_identifier: str, chart_type: str) -> List[Dict[str, Any]]:
+        """Retrieve chart data for visualizations"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        
+        if chart_type == 'birthyear':
+            chart_table = f"{safe_table_name}_{sheet_identifier}_chart_birthyear"
+        elif chart_type == 'birthmonth':
+            chart_table = f"{safe_table_name}_{sheet_identifier}_chart_birthmonth"
+        else:
+            raise ValueError(f"Invalid chart type: {chart_type}")
+        
+        try:
+            with self.connection.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f"SELECT * FROM {chart_table}")
+                rows = cur.fetchall()
+                return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"❌ Error retrieving chart data: {e}")
+            raise
+
+
+    def get_duplicate_groups(self, table_name: str, sheet_identifier: str, 
+                            group_type: str, page: int = 1, per_page: int = 50) -> Tuple[List[Dict], int]:
+        """Retrieve duplicate group data with pagination"""
+        safe_table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+        
+        if group_type == 'name_year':
+            view_name = f"{safe_table_name}_{sheet_identifier}_duplicates_name_year"
+        elif group_type == 'name_month':
+            view_name = f"{safe_table_name}_{sheet_identifier}_duplicates_name_month"
+        elif group_type == 'name_day':
+            view_name = f"{safe_table_name}_{sheet_identifier}_duplicates_name_day"
+        else:
+            raise ValueError(f"Invalid group type: {group_type}")
+        
+        try:
+            offset = (page - 1) * per_page
             
-        Returns:
-            int: Count of unique name+day combinations
-        """
-        query = f"""
-            SELECT COUNT(*) as unique_combos
-            FROM (
-                SELECT DISTINCT LOWER(TRIM(name)) as name, birth_day
-                FROM {table_name}
-                WHERE name IS NOT NULL
-                AND name != ''
-                AND birth_day IS NOT NULL
-            ) as unique_combos
-        """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result['unique_combos']
+            # Get total count
+            with self.connection.cursor() as cur:
+                cur.execute(f"SELECT COUNT(*) FROM {view_name}")
+                total_count = cur.fetchone()[0]
+            
+            # Get paginated data
+            with self.connection.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(f"""
+                    SELECT * FROM {view_name}
+                    LIMIT %s OFFSET %s
+                """, (per_page, offset))
+                rows = cur.fetchall()
+                
+            return [dict(row) for row in rows], total_count
+        except Exception as e:
+            logger.error(f"❌ Error retrieving duplicate groups: {e}")
+            raise

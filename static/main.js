@@ -341,57 +341,105 @@ function loadAnalyticsData() {
     loadAnalyticsDuplicates();
 }
 
+function loadanalytics(sheetKey) {
+    if (!currentSheet) {
+        alert('Please select a sheet first');
+        return;
+    }
+    
+    const loadBtn = event.target;
+    loadBtn.disabled = true;
+    loadBtn.textContent = '⏳ Creating Analytics...';
+    
+    fetch(`/analytics/${currentSheet}/create`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || 'Failed to create analytics');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Success - update button
+        loadBtn.textContent = '✅ Analytics Ready';
+        loadBtn.style.backgroundColor = '#95a5a6';
+        
+        // Load the analytics data
+        loadAnalyticsData();
+    })
+    .catch(error => {
+        console.error('Error creating analytics:', error);
+        alert('Failed to create analytics. Please try again.');
+        loadBtn.disabled = false;
+        loadBtn.textContent = '📥 Load analytics';
+    });
+}
+
+
 function loadAnalyticsSummary() {
+    if (!currentSheet) return;
+    
     const container = document.getElementById('analytics-summary');
     
-    console.log('[Analytics] Starting summary fetch...');
-    const startTime = performance.now();
+    // Show loading
+    container.innerHTML = `
+        <h3>Summary Statistics</h3>
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading summary...</p>
+        </div>
+    `;
     
     fetch(`/analytics/${currentSheet}/summary`)
-        .then(response => {
-            const fetchTime = performance.now() - startTime;
-            console.log(`[Analytics] Summary fetch completed in ${fetchTime.toFixed(0)}ms`);
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            const totalTime = performance.now() - startTime;
-            console.log(`[Analytics] Summary fully loaded in ${totalTime.toFixed(0)}ms`);
-            
             if (data.error) {
-                container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
+                container.innerHTML = `
+                    <h3>Summary Statistics</h3>
+                    <p style="color: #e74c3c;">Error: ${data.error}</p>
+                `;
                 return;
             }
             
+            // Render summary cards
             container.innerHTML = `
                 <h3>Summary Statistics</h3>
                 <div class="stats">
                     <div class="stat-item">
                         <div class="stat-label">Unique Names</div>
-                        <div class="stat-value">${data.unique_names.toLocaleString()}</div>
+                        <div class="stat-value">${(data.unique_names || 0).toLocaleString()}</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Unique Birthdays</div>
-                        <div class="stat-value">${data.unique_birthdays.toLocaleString()}</div>
+                        <div class="stat-value">${(data.unique_birthdays || 0).toLocaleString()}</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-label">Unique Name + Year</div>
-                        <div class="stat-value">${data.unique_name_year.toLocaleString()}</div>
+                        <div class="stat-label">Name+Year Combos</div>
+                        <div class="stat-value">${(data.unique_name_year || 0).toLocaleString()}</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-label">Unique Name + Month</div>
-                        <div class="stat-value">${data.unique_name_month.toLocaleString()}</div>
+                        <div class="stat-label">Name+Month Combos</div>
+                        <div class="stat-value">${(data.unique_name_month || 0).toLocaleString()}</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-label">Unique Name + Day</div>
-                        <div class="stat-value">${data.unique_name_day.toLocaleString()}</div>
+                        <div class="stat-label">Name+Day Combos</div>
+                        <div class="stat-value">${(data.unique_name_day || 0).toLocaleString()}</div>
                     </div>
                 </div>
             `;
         })
         .catch(error => {
-            const totalTime = performance.now() - startTime;
-            console.error(`[Analytics] Summary failed after ${totalTime.toFixed(0)}ms:`, error);
-            container.innerHTML = `<p style="color: #e74c3c;">Error loading summary</p>`;
+            console.error('Error loading analytics summary:', error);
+            container.innerHTML = `
+                <h3>Summary Statistics</h3>
+                <p style="color: #e74c3c;">Failed to load summary data</p>
+            `;
         });
 }
 
@@ -440,6 +488,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
                     `;
+                }
+
+                if (data.analytics_exists) {  // Add this field from backend
+                   const analyticsBtn = document.querySelector('#analytics-section button[onclick*="loadanalytics"]');
+                   if (analyticsBtn) {
+                       analyticsBtn.disabled = true;
+                       analyticsBtn.textContent = '✅ Analytics Ready';
+                       analyticsBtn.style.backgroundColor = '#95a5a6';
+                   }
                 }
             })
             .catch(err => {
