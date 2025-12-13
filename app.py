@@ -331,9 +331,9 @@ def get_analytics_summary(sheet_key):
         
         # Construct the table name
         safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
-        included_table = f"{safe_table_name}_{sheet['identifier']}_included"
+        original_table = f"{safe_table_name}_{sheet['identifier']}_original"
         
-        logger.info(f"Getting analytics for table: {included_table}")
+        logger.info(f"Getting analytics for table: {original_table}")
         
         # Initialize analytics
         analytics = DataAnalytics(DB_CONFIG)
@@ -342,11 +342,11 @@ def get_analytics_summary(sheet_key):
         try:
             # Get all summary statistics - pass the table name instead of sheet_id
             summary_data = {
-                'unique_names': analytics.get_total_unique_names(included_table),
-                'unique_birthdays': analytics.get_unique_birthday_combinations(included_table),
-                'unique_name_year': analytics.get_unique_name_year_combinations(included_table),
-                'unique_name_month': analytics.get_unique_name_month_combinations(included_table),
-                'unique_name_day': analytics.get_unique_name_day_combinations(included_table)
+                'unique_names': analytics.get_total_unique_names(original_table),
+                'unique_birthdays': analytics.get_unique_birthday_combinations(original_table),
+                'unique_name_year': analytics.get_unique_name_year_combinations(original_table),
+                'unique_name_month': analytics.get_unique_name_month_combinations(original_table),
+                'unique_name_day': analytics.get_unique_name_day_combinations(original_table)
             }
             
             logger.info(f"Analytics summary generated for {sheet_key}: {summary_data}")

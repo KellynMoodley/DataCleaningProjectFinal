@@ -110,7 +110,7 @@ function switchTab(tableType) {
     document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
     });
-    event.target.classList.add('active');
+    document.querySelector(`[onclick*="${tableType}"]`).classList.add('active');
     
     // Hide all sections
     document.querySelectorAll('.table-section').forEach(section => {

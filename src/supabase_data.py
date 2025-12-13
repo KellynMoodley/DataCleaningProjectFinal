@@ -256,11 +256,11 @@ class SupabaseManager:
                     result['counts']['original'] = cur.fetchone()[0]
                     
                     # Get included count
-                    cur.execute(f"SELECT COUNT(*) FROM {original_table} WHERE status = 'Included'")
+                    cur.execute(f"SELECT COUNT(*) FROM {original_table} WHERE status = 'included'")
                     result['counts']['included'] = cur.fetchone()[0]
                     
                     # Get excluded count
-                    cur.execute(f"SELECT COUNT(*) FROM {original_table} WHERE status = 'Excluded'")
+                    cur.execute(f"SELECT COUNT(*) FROM {original_table} WHERE status = 'excluded'")
                     result['counts']['excluded'] = cur.fetchone()[0]
         
             return result
