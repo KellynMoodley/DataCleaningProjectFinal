@@ -83,28 +83,21 @@ python -m venv venv
 If successful, you should see `(venv)` at the beginning of the command line.
 
 
-### 7. Upgrade pip
-
-```bash
-pip install --upgrade pip
-```
-
-
-### 8. Install Required Dependencies
+### 7. Install Required Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
 
-### 9. Run the Application
+### 8. Run the Application
 
 ```bash
 py app.py
 ```
 
 
-### 10. Open the Application in Your Browser
+### 9. Open the Application in Your Browser
 
 Navigate to:
 
