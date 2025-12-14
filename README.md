@@ -128,6 +128,7 @@ DataCleaningProjectFinal/
 ## Notes
 
 * Ensure the `.env` file contains all required environment variables before running the app.
+* The service_account.json must be added to the project folder as well.
 * The virtual environment must be activated every time before running the application.
 
 
