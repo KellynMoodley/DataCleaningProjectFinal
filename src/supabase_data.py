@@ -1,7 +1,5 @@
 import os
 import logging
-import time
-import uuid
 from typing import List, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import psycopg2

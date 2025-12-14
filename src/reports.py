@@ -1,7 +1,6 @@
 from flask import Response, send_file
 import csv
 from io import StringIO, BytesIO
-import io
 from datetime import datetime
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
