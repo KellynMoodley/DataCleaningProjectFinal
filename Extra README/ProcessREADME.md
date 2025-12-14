@@ -120,7 +120,7 @@ Processing batch 11/11 (rows 1000001 to 1047527)...
 2025-12-14 21:43:42,863 [INFO] Average rate: 19272 rows/sec
 2025-12-14 21:43:42,946 [INFO] 127.0.0.1 - - [14/Dec/2025 21:43:42] "POST /process/sheet2 HTTP/1.1" 200 -
 ```
-![alt text](images/images.png)
+![alt text](images/image3.png)
 
 # Create Analytics - Execution Logs
 
