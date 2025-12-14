@@ -415,8 +415,9 @@
                         </select>
                     </div>
                 </div>
+                <!-- REPLACE THIS ENTIRE filter-row div -->
                 <div class="filter-row">
-                    <input type="text" id="original-filter-name" placeholder="Filter by name..." onkeyup="applyFilters('original')">
+                    <input type="text" id="original-filter-name" placeholder="Filter by name...">
                     <select id="original-filter-month" onchange="applyFilters('original')">
                         <option value="">All Months</option>
                         <option value="1">January</option>
@@ -434,11 +435,10 @@
                     </select>
                     <select id="original-filter-year" onchange="applyFilters('original')">
                         <option value="">All Years</option>
-                        <!-- Years will be populated dynamically -->
                     </select>
+                    <button onclick="applyFilters('original')" style="background-color: #3498db;">Apply Filters</button>
                     <button onclick="clearFilters('original')" style="background-color: #95a5a6;">Clear Filters</button>
                 </div>
-
                 <div class="data-table" id="original-table-container">
                     <div class="loading">
                         <div class="spinner"></div>
@@ -462,7 +462,7 @@
                     </div>
 
                     <div class="filter-row">
-                        <input type="text" id="included-filter-name" placeholder="Filter by name..." onkeyup="applyFilters('included')">
+                        <input type="text" id="included-filter-name" placeholder="Filter by name...">
                         <select id="included-filter-month" onchange="applyFilters('included')">
                             <option value="">All Months</option>
                             <option value="1">January</option>
@@ -480,8 +480,8 @@
                         </select>
                         <select id="included-filter-year" onchange="applyFilters('included')">
                             <option value="">All Years</option>
-                            <!-- Years will be populated dynamically -->
                         </select>
+                        <button onclick="applyFilters('included')" style="background-color: #3498db;">Apply Filters</button>
                         <button onclick="clearFilters('included')" style="background-color: #95a5a6;">Clear Filters</button>
                     </div>
                     <div class="table-controls">
@@ -516,7 +516,7 @@
                     </div>
 
                     <div class="filter-row">
-                        <input type="text" id="excluded-filter-name" placeholder="Filter by name..." onkeyup="applyFilters('excluded')">
+                        <input type="text" id="excluded-filter-name" placeholder="Filter by name...">
                         <select id="excluded-filter-month" onchange="applyFilters('excluded')">
                             <option value="">All Months</option>
                             <option value="1">January</option>
@@ -534,8 +534,8 @@
                         </select>
                         <select id="excluded-filter-year" onchange="applyFilters('excluded')">
                             <option value="">All Years</option>
-                            <!-- Years will be populated dynamically -->
                         </select>
+                        <button onclick="applyFilters('excluded')" style="background-color: #3498db;">Apply Filters</button>
                         <button onclick="clearFilters('excluded')" style="background-color: #95a5a6;">Clear Filters</button>
                     </div>
                     <div class="table-controls">
