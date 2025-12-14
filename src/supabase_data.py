@@ -149,8 +149,8 @@ class SupabaseManager:
     # Data Retrieval
     # ---------------------------
     def get_table_data(self, table_name: str, page: int = 1, per_page: int = 100, 
-                       sort_by: str = 'original_row_number', sort_order: str = 'asc', status_filter: str = None) -> Tuple[List[Dict], int]:
-
+                    sort_by: str = 'original_row_number', sort_order: str = 'asc', 
+                    status_filter: str = None, filters: dict = None) -> Tuple[List[Dict], int]:
         try:
             # Validate sort order
             if sort_order.lower() not in ['asc', 'desc']:
@@ -167,34 +167,66 @@ class SupabaseManager:
             else:  # original - show all columns
                 columns = "*"
             
-            # Build WHERE clause
-            where_clause = f"WHERE status = '{status_filter}'" if status_filter else ""
+            # Build WHERE clause with filters
+            where_conditions = []
+            where_params = []
+            
+            # Add status filter
+            if status_filter:
+                where_conditions.append("status = %s")
+                where_params.append(status_filter)
+            
+            # Add name filter (case-insensitive LIKE)
+            if filters and filters.get('firstname'):
+                where_conditions.append("LOWER(firstname) LIKE LOWER(%s)")
+                where_params.append(f"%{filters['firstname']}%")
+            
+                
+                # Add month filter
+            if filters and filters.get('birthmonth'):
+                where_conditions.append("birthmonth = %s")
+                where_params.append(str(filters['birthmonth']))
+
+            # Add year filter
+            if filters and filters.get('birthyear'):
+                where_conditions.append("birthyear = %s")
+                where_params.append(str(filters['birthyear']))
+            
+            # Combine conditions
+            where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
             
             # Get total count
             with self.conn.cursor() as cur:
-                cur.execute(f"SELECT COUNT(*) FROM {table_name} {where_clause}")
+                count_sql = f"SELECT COUNT(*) FROM {table_name} {where_clause}"
+                if where_params:
+                    cur.execute(count_sql, where_params)
+                else:
+                    cur.execute(count_sql)
                 total_count = cur.fetchone()[0]
             
             # Get paginated data
             sql = f"""
                 SELECT {columns} FROM {table_name}
                 {where_clause}
-                ORDER BY original_row_number {sort_order}, row_id {sort_order}
+                ORDER BY {sort_by} {sort_order}
                 LIMIT %s OFFSET %s
             """
             
+            # Combine where_params with pagination params
+            all_params = where_params + [per_page, offset]
+            
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(sql, (per_page, offset))
+                cur.execute(sql, all_params)
                 rows = cur.fetchall()
-                
+            
             # Define desired column order
-                if status_filter == 'included':
-                    column_order = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear']
-                elif status_filter == 'excluded':
-                    column_order = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear', 'exclusion_reason']
-                else:
-                    column_order = None  # Keep original order for 'original' table
-                
+            if status_filter == 'included':
+                column_order = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear']
+            elif status_filter == 'excluded':
+                column_order = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear', 'exclusion_reason']
+            else:
+                column_order = None  # Keep original order for 'original' table
+            
             # Convert to list of dicts and handle any datetime serialization
             data = []
             for row in rows:

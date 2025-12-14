@@ -232,10 +232,19 @@ def get_table_data(sheet_key, table_type):
         safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
         table_name = f"{safe_table_name}_{sheet['identifier']}_original"
         
-        # Add status filter
-        status_filter = ""
-        if table_type in ['included', 'excluded']:
-            status_filter = f"WHERE status = '{table_type}'"
+        # Get filter parameters
+        filter_name = request.args.get('filter_name', '')
+        filter_month = request.args.get('filter_month', '')
+        filter_year = request.args.get('filter_year', '')
+        
+        # Build filters dictionary
+        filters = {}
+        if filter_name:
+            filters['firstname'] = filter_name
+        if filter_month:
+            filters['birthmonth'] = filter_month
+        if filter_year:
+            filters['birthyear'] = filter_year
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
@@ -243,14 +252,15 @@ def get_table_data(sheet_key, table_type):
         sort_by = request.args.get('sort_by', 'original_row_number')
         sort_order = request.args.get('sort_order', 'asc')
         
-        # Get data
+        # Get data with filters
         data, total_count = supabase_manager.get_table_data(
             table_name, 
             page, 
             per_page, 
             sort_by, 
             sort_order, 
-            table_type if table_type in ['included', 'excluded'] else None
+            table_type if table_type in ['included', 'excluded'] else None,
+            filters  # ← ADD THIS!
         )
         
         return jsonify({

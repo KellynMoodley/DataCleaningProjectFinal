@@ -6,6 +6,12 @@ let currentTableStates = {
     excluded: { page: 1, perPage: 100, sortBy: 'original_row_number', sortOrder: 'asc' }
 };
 
+let currentFilters = {
+    original: { name: '', month: '', year: '' },
+    included: { name: '', month: '', year: '' },
+    excluded: { name: '', month: '', year: '' }
+};
+
 // Process a sheet
 function processSheet(sheetKey) {
     const statusBox = document.getElementById(`status-${sheetKey}`);
@@ -156,10 +162,16 @@ function loadTableData(tableType) {
             <p>Loading data...</p>
         </div>
     `;
+
+    // Build URL with filters
+    const filters = currentFilters[tableType];
+    let url = `/data/${currentSheet}/${tableType}?page=${state.page}&per_page=${state.perPage}&sort_by=${state.sortBy}&sort_order=${state.sortOrder}`;
+
+    if (filters.name) url += `&filter_name=${encodeURIComponent(filters.name)}`;
+    if (filters.month) url += `&filter_month=${filters.month}`;
+    if (filters.year) url += `&filter_year=${filters.year}`;
     
     // Fetch data
-    const url = `/data/${currentSheet}/${tableType}?page=${state.page}&per_page=${state.perPage}&sort_by=${state.sortBy}&sort_order=${state.sortOrder}`;
-    
     fetch(url)
     .then(response => response.json())
     .then(data => {
@@ -242,7 +254,15 @@ function renderTable(tableType, data) {
     
     html += '</tbody></table>';
     
+    // Set table HTML first
     container.innerHTML = html;
+    
+    // Then populate year filter (after table is rendered)
+    if (data.length > 0) {
+        // Extract unique years for filter
+        const uniqueYears = [...new Set(data.map(row => row.birthyear).filter(y => y))].sort();
+        populateYearFilter(tableType, uniqueYears);
+    }
 }
 
 // Render pagination
@@ -1275,6 +1295,46 @@ function checkComparisonTablesExist() {
         .catch(err => {
             console.error('Error checking comparison tables:', err);
         });
+}
+
+// Apply filters
+function applyFilters(tableType) {
+    const nameFilter = document.getElementById(`${tableType}-filter-name`).value;
+    const monthFilter = document.getElementById(`${tableType}-filter-month`).value;
+    const yearFilter = document.getElementById(`${tableType}-filter-year`).value;
+    
+    currentFilters[tableType] = {
+        name: nameFilter,
+        month: monthFilter,
+        year: yearFilter
+    };
+    
+    // Reset to page 1 when filtering
+    currentTableStates[tableType].page = 1;
+    loadTableData(tableType);
+}
+
+// Clear filters
+function clearFilters(tableType) {
+    document.getElementById(`${tableType}-filter-name`).value = '';
+    document.getElementById(`${tableType}-filter-month`).value = '';
+    document.getElementById(`${tableType}-filter-year`).value = '';
+    
+    currentFilters[tableType] = { name: '', month: '', year: '' };
+    currentTableStates[tableType].page = 1;
+    loadTableData(tableType);
+}
+
+// Populate year filter dynamically
+function populateYearFilter(tableType, years) {
+    const yearSelect = document.getElementById(`${tableType}-filter-year`);
+    if (!yearSelect) return;
+    
+    // Keep "All Years" option and add unique years
+    yearSelect.innerHTML = '<option value="">All Years</option>';
+    years.forEach(year => {
+        yearSelect.innerHTML += `<option value="${year}">${year}</option>`;
+    });
 }
 
 // Update the existing DOMContentLoaded event listener
