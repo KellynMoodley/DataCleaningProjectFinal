@@ -106,23 +106,22 @@ http://127.0.0.1:5000
 
 ```
 DataCleaningProjectFinal/
-├── .env
-├── README.md
-├── app.py
-├── requirements.txt
-├── service_account.json
-├── src/
-│   ├── __init__.py
-│   ├── analytics.py
-│   ├── comparison.py
-│   ├── datacleaning.py
-│   ├── most_common_names.py
-│   ├── reports.py
-│   └── supabase_data.py
-├── static/
-│   └── main.js
+├── app.py                      # Main Flask application entry point
+├── requirements.txt            # Python dependencies
+├── service_account.json        # Google Sheets API credentials
+├── .env                        # Environment variables (DB credentials)
 ├── templates/
-│   └── index.html
+│   └── index.html             # Main dashboard template
+├── static/
+│   └── main.js                # Frontend JavaScript logic
+└── src/                       # Core modules
+    ├── __init__.py            # Package initializer
+    ├── supabase_data.py       # Database connection & operations
+    ├── datacleaning.py        # Data validation & cleaning logic
+    ├── analytics.py           # Analytics table creation & queries
+    ├── comparison.py          # JAN vs APR comparison analytics
+    ├── reports.py             # CSV/PDF report generation
+    └── most_common_names.py   # Top 80% names export
 ```
 
 
@@ -152,6 +151,3 @@ Additional Tools-
 •	dotenv (environment variables)
 •	Jinja2 (templating)
 •	Supabase
-
-
-
