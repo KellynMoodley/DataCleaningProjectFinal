@@ -120,7 +120,7 @@ Processing batch 11/11 (rows 1000001 to 1047527)...
 2025-12-14 21:43:42,863 [INFO] Average rate: 19272 rows/sec
 2025-12-14 21:43:42,946 [INFO] 127.0.0.1 - - [14/Dec/2025 21:43:42] "POST /process/sheet2 HTTP/1.1" 200 -
 ```
-![alt text](images/images3.png)
+![alt text](images/images.png)
 
 # Create Analytics - Execution Logs
 
@@ -173,8 +173,6 @@ Processing batch 11/11 (rows 1000001 to 1047527)...
 ```
 
 # Comparison Analytics - Execution Logs
-
-## Process Execution Log
 
 ```
 2025-12-14 22:02:49,417 [INFO] Creating comparison analytics between JAN and APR
