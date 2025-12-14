@@ -43,7 +43,7 @@ cd DataCleaningProjectFinal
 2. Copy and paste the following files into the **main project directory**:
 
    * `.env`
-   * `service_account.py` or `service_account.json` (depending on your setup)
+   *  `service_account.json` 
 
 
 ### 5. Create a Virtual Environment
