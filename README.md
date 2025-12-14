@@ -172,4 +172,3 @@ Additional Tools-
 •	dotenv (environment variables)
 •	Jinja2 (templating)
 •	Supabase
-
