@@ -126,7 +126,7 @@ DataCleaningProjectFinal/
 │   ├── Assessment_checklistREADME.md
 │   ├── ProcessREADME.md
 │   └── ProjectREADME.md
-    ├── images                     # images for ProcessREADME
+    ├── images                     # images for ProcessREADME.md
         ├── image3.png
         ├── images1.png
         └── images2.png

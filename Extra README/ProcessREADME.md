@@ -124,8 +124,6 @@ Processing batch 11/11 (rows 1000001 to 1047527)...
 
 # Create Analytics - Execution Logs
 
-## Create Analytics Execution Log
-
 ``` 
 2025-12-14 21:56:46,767 [INFO] Creating analytics for sheet: sheet2
 ✓ Database connection established
