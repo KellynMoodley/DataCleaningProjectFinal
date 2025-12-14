@@ -1,6 +1,6 @@
 # Data Cleaning Project
 
-## IMPORTANT NOTES
+## IMPORTANT NOTE
 
 There are additional README files to help explain the code in more detail:
 
