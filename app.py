@@ -9,7 +9,6 @@ from googleapiclient.discovery import build
 import time
 import uuid
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src import DataCleaner, SupabaseManager, ReportGenerator, DataAnalytics, MostCommonNamesExporter, ComparisonAnalytics, DB_CONFIG
 
@@ -446,7 +445,7 @@ def get_analytics_summary(sheet_key):
             
     except Exception as e:
         logger.error(f"Error generating analytics summary: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No database available. Please click on Load Analytics'}), 404
     
 @app.route('/analytics/<sheet_key>/duplicates/<group_type>')
 def get_duplicate_groups(sheet_key, group_type):
@@ -494,7 +493,7 @@ def get_duplicate_groups(sheet_key, group_type):
             
     except Exception as e:
         logger.error(f"Error getting duplicate groups: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No database available. Please click on Load Analytics'}), 404
 
 
 @app.route('/analytics/<sheet_key>/charts/<chart_type>')
@@ -528,7 +527,7 @@ def get_chart_data(sheet_key, chart_type):
             
     except Exception as e:
         logger.error(f"Error getting chart data: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No database available. Please click on Load Analytics'}), 404
  
 @app.route('/analytics/<sheet_key>/common_names')    
 def get_common_names(sheet_key):
@@ -569,7 +568,7 @@ def get_common_names(sheet_key):
             
     except Exception as e:
         logger.error(f"Error getting common names: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No database available. Please click on Load Analytics'}), 404
 
 
 @app.route('/analytics/<sheet_key>/common_names/download/<format>')
@@ -633,7 +632,7 @@ def create_comparison():
             
     except Exception as e:
         logger.error(f"Error creating comparison analytics: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No database available. Please click on Load Analytics'}), 404
 
 
 @app.route('/comparison/summary')
@@ -658,7 +657,7 @@ def get_comparison_summary():
             
     except Exception as e:
         logger.error(f"Error getting comparison summary: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No database available. Please click on Load Comparison'}), 404
 
 
 @app.route('/comparison/common_names')
@@ -697,7 +696,7 @@ def get_comparison_common_names():
             
     except Exception as e:
         logger.error(f"Error getting common names: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No database available. Please click on Load Analytics'}), 404
 
 
 @app.route('/comparison/unique_jan')
@@ -736,7 +735,7 @@ def get_comparison_unique_jan():
             
     except Exception as e:
         logger.error(f"Error getting unique JAN names: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No database available. Please click on Load Analytics'}), 404
 
 
 @app.route('/comparison/unique_apr')

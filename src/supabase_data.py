@@ -78,9 +78,9 @@ class SupabaseManager:
             row_id UUID PRIMARY KEY,
             original_row_number INTEGER NOT NULL,
             firstname TEXT,
-            birthday TEXT,
-            birthmonth TEXT,
-            birthyear TEXT,
+            birthday INTEGER,
+            birthmonth INTEGER,
+            birthyear INTEGER,
             exclusion_reason TEXT,
             status TEXT NOT NULL
         );
@@ -126,7 +126,10 @@ class SupabaseManager:
             writer = csv.writer(buffer, quoting=csv.QUOTE_ALL)
             
             for row in rows:
-               writer.writerow([row[k] for k in keys])
+               writer.writerow([
+                    int(row[k]) if k in ['birthday', 'birthmonth', 'birthyear'] and row[k] is not None else row[k]
+                    for k in keys
+                ])
                
             buffer.seek(0)
 
@@ -183,12 +186,12 @@ class SupabaseManager:
                 # Add month filter
             if filters and filters.get('birthmonth'):
                 where_conditions.append("birthmonth = %s")
-                where_params.append(str(filters['birthmonth']))
+                where_params.append(int(filters['birthmonth']))
 
             # Add year filter
             if filters and filters.get('birthyear'):
                 where_conditions.append("birthyear = %s")
-                where_params.append(str(filters['birthyear']))
+                where_params.append(int(filters['birthyear']))
             
             # Combine conditions
             where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
