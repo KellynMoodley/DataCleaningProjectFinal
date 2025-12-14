@@ -1529,8 +1529,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (section) {
                             const analyticsBtn = section.querySelector('button[onclick*="loadanalytics"]');
                             if (analyticsBtn) {
-                                analyticsBtn.disabled = true;
-                                analyticsBtn.textContent = '✅ Analytics Ready';
+                                analyticsBtn.textContent = '✅ Load Analytics';
                                 analyticsBtn.style.backgroundColor = '#95a5a6';
                             }
                         }

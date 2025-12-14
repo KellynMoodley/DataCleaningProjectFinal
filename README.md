@@ -1,5 +1,16 @@
 # Data Cleaning Project
 
+## IMPORTANT NOTE
+
+There are additional README files to help explain the code in more detail:
+
+* **ProjectREADME** – Explains the code in detail.
+* **Assessment_checklistREADME** – Checklist of what was implemented in this task based on the question.
+* **ProcessREADME** – The current website does not allow for processing (explained in Assessment_checklistREADME), as processing has already been completed. This README shows examples of the logs after the "Process Sheet" button was pressed.
+
+**Note:** Loading tables and downloading CSVs and PDFs may take some time due to the large datasets and formatting. Please avoid changing operations until the files have finished downloading.
+
+
 ## How to Run the Project (Using a Virtual Environment – Windows)
 
 Follow the steps below to set up and run the application locally.
@@ -152,3 +163,4 @@ Additional Tools-
 •	dotenv (environment variables)
 •	Jinja2 (templating)
 •	Supabase
+
