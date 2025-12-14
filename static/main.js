@@ -1,28 +1,55 @@
-// Global state
+// Tracks which Google Sheet is currently selected.
 let currentSheet = null;
+
+// Stores pagination and sorting state for each table.
 let currentTableStates = {
     original: { page: 1, perPage: 100, sortBy: 'original_row_number', sortOrder: 'asc' },
     included: { page: 1, perPage: 100, sortBy: 'original_row_number', sortOrder: 'asc' },
     excluded: { page: 1, perPage: 100, sortBy: 'original_row_number', sortOrder: 'asc' }
 };
 
+// Stores active filters (name, month, year) for each table.
 let currentFilters = {
     original: { name: '', month: '', year: '' },
     included: { name: '', month: '', year: '' },
     excluded: { name: '', month: '', year: '' }
 };
 
-// Process a sheet
+// Global Chart.js instance (used so charts can be destroyed/reloaded)
+let chartInstance = null;
+
+// State for duplicate records pagination and grouping
+let currentDuplicatesState = {
+    groupType: 'name_year',
+    page: 1,
+    perPage: 50
+};
+
+//comparison state
+let currentComparisonState = {
+    view: 'summary',  
+    page: 1,
+    perPage: 50,
+    filterTop80: null,
+    top80Only: false
+};
+
+
+// ==============================
+// SHEET PROCESSING
+// ==============================
+
+// Sends a request to process a Google Sheet and displays status + results
 function processSheet(sheetKey) {
     const statusBox = document.getElementById(`status-${sheetKey}`);
     const processBtn = event.target;
     const viewBtn = document.getElementById(`view-btn-${sheetKey}`);
     
-    // Disable buttons
+    // Disable process button while running
     processBtn.disabled = true;
     processBtn.textContent = '⏳ Processing...';
     
-    // Show loading status
+    // Show loading UI
     statusBox.className = 'status-box show';
     statusBox.innerHTML = `
         <div style="text-align: center;">
@@ -32,7 +59,7 @@ function processSheet(sheetKey) {
         </div>
     `;
     
-    // Make POST request to process the sheet
+    // POST request to backend to process the sheet
     fetch(`/process/${sheetKey}`, {
         method: 'POST'
     })
@@ -48,7 +75,7 @@ function processSheet(sheetKey) {
             return;
         }
         
-        // Show success status with stats
+        // Display success statistics
         statusBox.className = 'status-box show success';
         statusBox.innerHTML = `
             <p><strong>✅ Processing Complete!</strong></p>
@@ -68,14 +95,14 @@ function processSheet(sheetKey) {
             </div>
         `;
         
-        // Enable view button
+        // Enable viewing data
         viewBtn.disabled = false;
-        // Inside processSheet() function, in the success handler after viewBtn.disabled = false;
+        // Lock process button
         processBtn.disabled = true;
         processBtn.textContent = '✅ Already Processed';
         processBtn.style.backgroundColor = '#95a5a6';
         
-        // Store current sheet
+        // Set current active sheet
         currentSheet = sheetKey;
     })
     .catch(error => {
@@ -89,17 +116,23 @@ function processSheet(sheetKey) {
     });
 }
 
+// ==============================
+// VIEW SHEET DATA
+// ==============================
+
+// Displays data section and loads default table
+
 function viewSheetData(sheetKey) {
     currentSheet = sheetKey;
 
-    // Show data display section
+    // Show data container
     const dataDisplay = document.getElementById('data-display');
     dataDisplay.style.display = 'block';
 
-    // Update currently viewed sheet label
+    // Update header with sheet name
     const sheetNameElement = document.getElementById('current-sheet-name');
 
-    // Try to read display name from DOM (fallback to key)
+    // Attempt to get display name from DOM
     const sheetCard = document.querySelector(
         `.sheet-card button[onclick="viewSheetData('${sheetKey}')"]`
     )?.closest('.sheet-card');
@@ -110,7 +143,7 @@ function viewSheetData(sheetKey) {
 
     sheetNameElement.textContent = `${displayName} (${sheetKey})`;
 
-    // Scroll to data display
+    // Scroll into view
     dataDisplay.scrollIntoView({ behavior: 'smooth' });
 
     // Reset table states
@@ -120,14 +153,17 @@ function viewSheetData(sheetKey) {
         excluded: { page: 1, perPage: 100, sortBy: 'original_row_number', sortOrder: 'asc' }
     };
 
-    // Load data for default tab
+    // Load default tab
     switchTab('original');
 }
 
+// ==============================
+// TAB NAVIGATION
+// ==============================
 
-// Switch between tabs
+// Handles switching between tabs and loading appropriate content
 function switchTab(tableType) {
-    // Update tab active state for main tabs only
+    // Remove active class from main tabs
     const mainTabs = document.querySelectorAll('.tabs > .tab');
     mainTabs.forEach(tab => tab.classList.remove('active'));
     if (event && event.target) {
@@ -146,7 +182,7 @@ function switchTab(tableType) {
     if (section) {
         section.classList.add('show');
         
-        // Load data based on section type
+        // Load section-specific data
         if (tableType === 'original' || tableType === 'included' || tableType === 'excluded') {
             loadTableData(tableType);
         } else if (tableType === 'summary_stats') {
@@ -163,14 +199,18 @@ function switchTab(tableType) {
     }
 }
 
-// Load table data
+// ==============================
+// TABLE DATA LOADING
+// ==============================
+
+// Fetches paginated, sorted, and filtered table data from backend
 function loadTableData(tableType) {
     if (!currentSheet) return;
     
     const state = currentTableStates[tableType];
     const container = document.getElementById(`${tableType}-table-container`);
     
-    // Show loading
+    // Show loading indicator
     container.innerHTML = `
         <div class="loading">
             <div class="spinner"></div>
@@ -178,7 +218,7 @@ function loadTableData(tableType) {
         </div>
     `;
 
-    // Build URL with filters
+    // Build API URL with pagination, sorting, and filters
     const filters = currentFilters[tableType];
     let url = `/data/${currentSheet}/${tableType}?page=${state.page}&per_page=${state.perPage}&sort_by=${state.sortBy}&sort_order=${state.sortOrder}`;
 
@@ -186,7 +226,7 @@ function loadTableData(tableType) {
     if (filters.month) url += `&filter_month=${filters.month}`;
     if (filters.year) url += `&filter_year=${filters.year}`;
     
-    // Fetch data
+    // Fetch table data
     fetch(url)
     .then(response => response.json())
     .then(data => {
@@ -199,10 +239,10 @@ function loadTableData(tableType) {
             return;
         }
         
-        // Render table
+        // Render table rows
         renderTable(tableType, data.data);
         
-        // Render pagination
+        // Render pagination controls
         renderPagination(tableType, data.page, data.total_pages, data.total_count);
     })
     .catch(error => {
@@ -215,16 +255,21 @@ function loadTableData(tableType) {
     });
 }
 
-// Render table
+// ==============================
+// TABLE RENDERING
+// ==============================
+
+// Renders HTML table based on returned dataset
 function renderTable(tableType, data) {
     const container = document.getElementById(`${tableType}-table-container`);
-    
+
+    // Handle empty datasets
     if (!data || data.length === 0) {
         container.innerHTML = '<p style="text-align: center; padding: 40px; color: #7f8c8d;">No data available</p>';
         return;
     }
     
-    // Define column order based on table type
+    // Define column order depending on table type
     let columns;
     if (tableType === 'included') {
         columns = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear'];
@@ -234,14 +279,15 @@ function renderTable(tableType, data) {
         columns = ['original_row_number', 'row_id', 'firstname', 'birthday', 'birthmonth', 'birthyear', 'exclusion_reason', 'status'];
     }
     
-    // Filter columns to only include those that exist in the data
+    // Only keep columns that actually exist in the data
     columns = columns.filter(col => col in data[0]);
     
     const state = currentTableStates[tableType];
     
-    // Build table HTML
+    // Start building table HTML
     let html = '<table><thead><tr>';
-    
+
+    // Render table headers with sorting controls
     columns.forEach(col => {
         const sortIndicator = state.sortBy === col ? 
             (state.sortOrder === 'asc' ? '▲' : '▼') : '';
@@ -250,7 +296,7 @@ function renderTable(tableType, data) {
     
     html += '</tr></thead><tbody>';
     
-    // Add rows
+    // Render table rows
     data.forEach(row => {
         html += '<tr>';
         columns.forEach(col => {
@@ -258,7 +304,7 @@ function renderTable(tableType, data) {
             if (value === null || value === undefined) {
                 value = '';
             }
-            // Truncate long text
+            // Truncate long strings for readability
             if (typeof value === 'string' && value.length > 100) {
                 value = value.substring(0, 100) + '...';
             }
@@ -269,10 +315,10 @@ function renderTable(tableType, data) {
     
     html += '</tbody></table>';
     
-    // Set table HTML first
+    // Insert table HTML
     container.innerHTML = html;
     
-    // Then populate year filter (after table is rendered)
+    // Populate year filter options dynamically
     if (data.length > 0) {
         // Extract unique years for filter
         const uniqueYears = [...new Set(data.map(row => row.birthyear).filter(y => y))].sort();
@@ -280,10 +326,15 @@ function renderTable(tableType, data) {
     }
 }
 
-// Render pagination
+// ==============================
+// PAGINATION
+// ==============================
+
+// Renders pagination controls below tables
 function renderPagination(tableType, currentPage, totalPages, totalCount) {
     const container = document.getElementById(`${tableType}-pagination`);
-    
+
+    // If only one page, show total count only
     if (totalPages <= 1) {
         container.innerHTML = `<div class="page-info">Total: ${totalCount} records</div>`;
         return;
@@ -304,7 +355,11 @@ function renderPagination(tableType, currentPage, totalPages, totalCount) {
     container.innerHTML = html;
 }
 
-// Sort table
+// ==============================
+// SORTING & PAGING CONTROLS
+// ==============================
+
+// Updates sorting state and reloads table
 function sortTable(tableType, column) {
     const state = currentTableStates[tableType];
     
@@ -316,14 +371,14 @@ function sortTable(tableType, column) {
         state.sortOrder = 'asc';
     }
     
-    // Reset to page 1
+    // Reset to first page after sorting
     state.page = 1;
     
     // Reload data
     loadTableData(tableType);
 }
 
-// Go to page
+// Navigates to a specific page
 function goToPage(tableType, page) {
     const state = currentTableStates[tableType];
     state.page = page;
@@ -339,27 +394,32 @@ function changePerPage(tableType) {
     loadTableData(tableType);
 }
 
-// Utility functions
+// Converts snake_case to Title Case for column headers
 function formatColumnName(name) {
     return name
         .replace(/_/g, ' ')
         .replace(/\b\w/g, l => l.toUpperCase());
 }
 
+// Escapes HTML to prevent XSS
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// Download table data
+// ==============================
+// TABLE DOWNLOADS
+// ==============================
+
+// Downloads the currently viewed table in CSV or JSON format
 function downloadTable(tableType, format) {
     if (!currentSheet) {
         alert('Please select a sheet first');
         return;
     }
     
-    // Show loading state
+    // Show temporary loading notification
     const statusMessage = document.createElement('div');
     statusMessage.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #3498db; color: white; padding: 15px 20px; border-radius: 8px; z-index: 9999;';
     statusMessage.textContent = `Generating ${format.toUpperCase()}... Please wait.`;
@@ -368,27 +428,32 @@ function downloadTable(tableType, format) {
     // Trigger download
     window.location.href = `/download/${currentSheet}/${tableType}/${format}`;
     
-    // Remove status message after delay
+    // Remove loading notification
     setTimeout(() => {
         statusMessage.remove();
     }, 3000);
 }
 
 
-//analytics section 
+// ==============================
+// ANALYTICS SECTION
+// ==============================
+
+// Loads all analytics components in sequence
 function loadAnalyticsData() {
     if (!currentSheet) return;
     
-    // Load summary first (fast)
+    // Load quick summary first
     loadAnalyticsSummary();
     
-    // Load distributions (medium speed)
+    // Load charts next
     loadAnalyticsDistributions();
     
-    // Load duplicates last (slow)
+    // Load duplicates last (slowest)
     loadAnalyticsDuplicates();
 }
 
+// Creates analytics tables on backend
 function loadanalytics(sheetKey) {
     if (!currentSheet) {
         alert('Please select a sheet first');
@@ -418,7 +483,7 @@ function loadanalytics(sheetKey) {
         loadBtn.textContent = '✅ Analytics Ready';
         loadBtn.style.backgroundColor = '#95a5a6';
         
-        // Load the analytics data
+        // Load analytics data into UI
         loadAnalyticsData();
     })
     .catch(error => {
@@ -429,7 +494,11 @@ function loadanalytics(sheetKey) {
     });
 }
 
+// ==============================
+// ANALYTICS SUMMARY
+// ==============================
 
+// Loads summary statistics for analytics
 function loadAnalyticsSummary() {
     if (!currentSheet) return;
     
@@ -487,47 +556,44 @@ function loadAnalyticsSummary() {
         });
 }
 
-// Global chart instance
-let chartInstance = null;
-
-// State for duplicates
-let currentDuplicatesState = {
-    groupType: 'name_year',
-    page: 1,
-    perPage: 50
-};
-
-
+//loads chart
 function loadAnalyticsDistributions() {
-    // Load default chart
     loadChart('birthyear');
 }
 
+// ==============================
+// ANALYTICS DUPLICATES
+// ==============================
+
+// Loads default duplicates grouping
 function loadAnalyticsDuplicates() {
     // Load default duplicates
     loadDuplicates('name_year');
 }
 
+// Switches duplicate grouping type
 function loadDuplicates(groupType) {
     if (!currentSheet) return;
-    
+    // Update global state for duplicates view
     currentDuplicatesState.groupType = groupType;
     currentDuplicatesState.page = 1;
     
-    // Update tab active state for duplicate tabs
+    // Update active tab styling
     const duplicateTabs = document.querySelectorAll('#duplicates-section .tabs .tab');
     duplicateTabs.forEach(tab => tab.classList.remove('active'));
     if (event && event.target) {
         event.target.classList.add('active');
     }
     
-    fetchDuplicates();
+    fetchDuplicates();// Fetch duplicate data from server
 }
 
+// Fetch duplicate data from backend
 function fetchDuplicates() {
     const container = document.getElementById('duplicates-container');
     const { groupType, page, perPage } = currentDuplicatesState;
     
+    // Show loading spinner
     container.innerHTML = `
         <div class="loading">
             <div class="spinner"></div>
@@ -535,6 +601,7 @@ function fetchDuplicates() {
         </div>
     `;
     
+    // Call backend endpoint for duplicates
     fetch(`/analytics/${currentSheet}/duplicates/${groupType}?page=${page}&per_page=${perPage}`)
         .then(response => response.json())
         .then(data => {
@@ -558,6 +625,11 @@ function fetchDuplicates() {
         });
 }
 
+// ==============================
+// DUPLICATE RENDERING
+// ==============================
+
+// Render duplicate groups as a simple list with counts
 function renderDuplicates(duplicates, groupType) {
     const container = document.getElementById('duplicates-container');
     
@@ -570,7 +642,7 @@ function renderDuplicates(duplicates, groupType) {
     
     duplicates.forEach(dup => {
         let label = '';
-        
+        // Build label based on grouping type
         if (groupType === 'name_year') {
             label = `${escapeHtml(dup.firstname)} - ${dup.birthyear}`;
         } else if (groupType === 'name_month') {
@@ -597,6 +669,7 @@ function renderDuplicates(duplicates, groupType) {
     container.innerHTML = html;
 }
 
+//sort out duplicates pagination
 function renderDuplicatesPagination(currentPage, totalPages, totalCount) {
     const container = document.getElementById('duplicates-pagination');
     
@@ -620,11 +693,17 @@ function renderDuplicatesPagination(currentPage, totalPages, totalCount) {
     container.innerHTML = html;
 }
 
+//navigate to duplicate pages
 function goToDuplicatesPage(page) {
     currentDuplicatesState.page = page;
     fetchDuplicates();
 }
 
+// ==============================
+// ANALYTICS CHARTS
+// ==============================
+
+//load charts
 function loadChart(chartType) {
     if (!currentSheet) return;
     
@@ -645,6 +724,7 @@ function loadChart(chartType) {
         </div>
     `;
     
+    // Fetch chart data from backend
     fetch(`/analytics/${currentSheet}/charts/${chartType}`)
         .then(response => response.json())
         .then(data => {
@@ -653,7 +733,7 @@ function loadChart(chartType) {
                 return;
             }
             
-            // Restore canvas
+            // Restore canvas for Chart.js
             container.innerHTML = '<canvas id="analytics-chart" style="max-height: 400px;"></canvas>';
             renderChart(data.data, chartType);
         })
@@ -663,6 +743,7 @@ function loadChart(chartType) {
         });
 }
 
+// Render chart using Chart.js
 function renderChart(data, chartType) {
     const canvas = document.getElementById('analytics-chart');
     
@@ -672,7 +753,7 @@ function renderChart(data, chartType) {
         return;
     }
     
-    // Destroy existing chart if it exists
+    // Destroy existing chart if present
     if (chartInstance) {
         chartInstance.destroy();
     }
@@ -767,6 +848,11 @@ function renderChart(data, chartType) {
     });
 }
 
+// ==============================
+// COMMON NAMES ANALYTICS
+// ==============================
+
+// Load most common names with summary stats
 function loadCommonNames() {
     if (!currentSheet) return;
     
@@ -793,7 +879,7 @@ function loadCommonNames() {
                 return;
             }
             
-            // Render the data with frequencies
+            // Build HTML table with frequency stats
             let html = `
                 <div style="padding: 20px;">
                     <div class="stats" style="margin-bottom: 20px;">
@@ -868,6 +954,7 @@ function loadCommonNames() {
         });
 }
 
+// Trigger download of common names
 function downloadCommonNames(format) {
     if (!currentSheet) {
         alert('Please select a sheet first');
@@ -890,16 +977,11 @@ function downloadCommonNames(format) {
 }
 
 
-// Add this state object near the top with other global states
-let currentComparisonState = {
-    view: 'summary',  // 'summary', 'common_names', 'unique_jan', 'unique_apr'
-    page: 1,
-    perPage: 50,
-    filterTop80: null,
-    top80Only: false
-};
+// ==============================
+// Comparison Section Functions
+// ==============================
 
-// Add this function with other load functions
+// Load the comparison section placeholder with a loading message
 function loadComparison() {
     const container = document.getElementById('comparison-container');
     
@@ -912,9 +994,10 @@ function loadComparison() {
     `;
 }
 
+// Trigger the creation of comparison analytics via a POST request
 function loadComparisonAnalytics() {
     const loadBtn = event.target;
-    loadBtn.disabled = true;
+    loadBtn.disabled = true; // prevent multiple clicks
     loadBtn.textContent = '⏳ Creating Comparison...';
     
     fetch('/comparison/create', {
@@ -947,6 +1030,7 @@ function loadComparisonAnalytics() {
     });
 }
 
+// Load summary of the comparison data
 function loadComparisonSummary() {
     const container = document.getElementById('comparison-container');
     
@@ -965,7 +1049,7 @@ function loadComparisonSummary() {
                 container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
                 return;
             }
-            
+            // Render the comparison summary stats
             renderComparisonSummary(data);
         })
         .catch(error => {
@@ -974,9 +1058,11 @@ function loadComparisonSummary() {
         });
 }
 
+// Render the comparison summary UI
 function renderComparisonSummary(summary) {
     const container = document.getElementById('comparison-container');
     
+    // Create HTML for summary stats (JAN/APR totals, unique, top 80%, etc.)
     let html = `
         <div style="padding: 20px;">
             <h3 style="color: #2c3e50; margin-bottom: 20px;">📊 Dataset Overview</h3>
@@ -1073,28 +1159,37 @@ function renderComparisonSummary(summary) {
     container.innerHTML = html;
 }
 
+// ==============================
+// Detailed Comparison Tables
+// ==============================
+
+// Load Common Names table
 function loadComparisonCommonNames() {
     currentComparisonState.view = 'common_names';
-    currentComparisonState.page = 1;
+    currentComparisonState.page = 1;// reset page
     fetchComparisonData();
 }
 
+// Load Unique JAN Names table
 function loadComparisonUniqueJan() {
     currentComparisonState.view = 'unique_jan';
     currentComparisonState.page = 1;
     fetchComparisonData();
 }
 
+// Load Unique APR Names table
 function loadComparisonUniqueApr() {
     currentComparisonState.view = 'unique_apr';
     currentComparisonState.page = 1;
     fetchComparisonData();
 }
 
+// Fetch table data based on current state (view, page, filters)
 function fetchComparisonData() {
     const container = document.getElementById('comparison-container');
     const { view, page, perPage, filterTop80, top80Only } = currentComparisonState;
     
+    // Show loading spinner
     container.innerHTML = `
         <div class="loading">
             <div class="spinner"></div>
@@ -1102,6 +1197,7 @@ function fetchComparisonData() {
         </div>
     `;
     
+    // Build URL based on table type
     let url = '';
     if (view === 'common_names') {
         url = `/comparison/common_names?page=${page}&per_page=${perPage}`;
@@ -1119,7 +1215,7 @@ function fetchComparisonData() {
                 container.innerHTML = `<p style="color: #e74c3c;">Error: ${data.error}</p>`;
                 return;
             }
-            
+            // Render table data
             renderComparisonTable(data);
         })
         .catch(error => {
@@ -1128,13 +1224,19 @@ function fetchComparisonData() {
         });
 }
 
+
 function renderComparisonTable(data) {
+    // Get the container where the comparison table will be rendered
     const container = document.getElementById('comparison-container');
+
+    // Get the current table view (common_names, unique_jan, unique_apr)
     const { view } = currentComparisonState;
     
+    // Initialize variables for table title and dataset for download
     let title = '';
     let downloadDataset = '';
     
+    // Set title and download dataset based on current view
     if (view === 'common_names') {
         title = 'Common Names (in both JAN and APR)';
         downloadDataset = 'common_names';
@@ -1146,6 +1248,7 @@ function renderComparisonTable(data) {
         downloadDataset = 'unique_apr';
     }
     
+    // Start building the HTML for the table container
     let html = `
         <div style="padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -1164,7 +1267,7 @@ function renderComparisonTable(data) {
                 <table style="width: 100%; border-collapse: collapse;">
     `;
     
-    // Render table based on view type
+    // Render table header & rows for common names
     if (view === 'common_names') {
         html += `
             <thead>
@@ -1180,6 +1283,7 @@ function renderComparisonTable(data) {
             <tbody>
         `;
         
+        // Render each row of common names data
         data.data.forEach((row, index) => {
             const bgColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
             html += `
@@ -1210,6 +1314,7 @@ function renderComparisonTable(data) {
             <tbody>
         `;
         
+        // Render each row of unique names data
         data.data.forEach((row, index) => {
             const bgColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
             const inTop80 = view === 'unique_jan' ? row.in_jan_top80 : row.in_apr_top80;
@@ -1235,15 +1340,17 @@ function renderComparisonTable(data) {
     
     container.innerHTML = html;
     
-    // Render pagination if needed
+    // Render pagination if multiple pages exist
     if (data.total_pages > 1) {
         renderComparisonPagination(data.page, data.total_pages, data.total_count);
     }
 }
 
+// Comparison Pagination Functions
 function renderComparisonPagination(currentPage, totalPages, totalCount) {
     const container = document.getElementById('comparison-container');
     
+    // Generate pagination controls
     let paginationHtml = `
         <div class="pagination" style="margin-top: 20px;">
             <button onclick="goToComparisonPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
@@ -1261,14 +1368,19 @@ function renderComparisonPagination(currentPage, totalPages, totalCount) {
     container.innerHTML += paginationHtml;
 }
 
+//navigate to comparison page
 function goToComparisonPage(page) {
     currentComparisonState.page = page;
     fetchComparisonData();
 }
 
+// ==============================
+// Comparison Download Function
+// ==============================
 function downloadComparisonData(dataset) {
     const { filterTop80, top80Only } = currentComparisonState;
     
+    // Construct the download URL
     let url = `/comparison/download/${dataset}/csv`;
     
     if (dataset === 'common_names' && filterTop80) {
@@ -1292,7 +1404,7 @@ function downloadComparisonData(dataset) {
     }, 3000);
 }
 
-// Add this function to check if comparison tables exist
+// Check if comparison tables exist
 function checkComparisonTablesExist() {
     fetch('/comparison/check')
         .then(response => response.json())
@@ -1311,13 +1423,17 @@ function checkComparisonTablesExist() {
             console.error('Error checking comparison tables:', err);
         });
 }
+// ==============================
+// Apply filters to a specific table
+// ==============================
 
-// Apply filters
 function applyFilters(tableType) {
+    // Get the values from the filter input fields
     const nameFilter = document.getElementById(`${tableType}-filter-name`).value;
     const monthFilter = document.getElementById(`${tableType}-filter-month`).value;
     const yearFilter = document.getElementById(`${tableType}-filter-year`).value;
     
+    // Save the current filter state for this table
     currentFilters[tableType] = {
         name: nameFilter,
         month: monthFilter,
@@ -1345,14 +1461,19 @@ function populateYearFilter(tableType, years) {
     const yearSelect = document.getElementById(`${tableType}-filter-year`);
     if (!yearSelect) return;
     
-    // Keep "All Years" option and add unique years
+    // Start with default "All Years" option
     yearSelect.innerHTML = '<option value="">All Years</option>';
     years.forEach(year => {
         yearSelect.innerHTML += `<option value="${year}">${year}</option>`;
     });
 }
 
-// Update the existing DOMContentLoaded event listener
+
+// ==============================
+// Initialize sheet status and comparison checks on DOM load
+// ==============================
+
+
 document.addEventListener('DOMContentLoaded', function() {
     // Get all sheet keys from the page
     const sheetCards = document.querySelectorAll('.sheet-card');

@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Sheets Data Cleaning Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>Google Sheets Data Cleaning Dashboard</title> 
+    <!-- Chart.js library used for analytics bar charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script> 
+    <!-- CSS Section -->
     <style>
         * {
             margin: 0;
@@ -365,18 +367,23 @@
     </style>
 </head>
 <body>
+    <!-- Main page container -->
     <div class="container">
         <h1>📊 Google Sheets Data Cleaning Dashboard</h1>
 
+        <!-- Sheets grid renders each Google Sheet using server-side data and allows processing and viewing cleaned results -->
         <div class="sheets-grid">
             {% for key, sheet in sheets.items() %}
+            <!-- Sheet showing metadata and action buttons -->
             <div class="sheet-card">
+                <!--Displays sheet information-->
                 <h3>{{ sheet.display_name }}</h3>
                 <div class="sheet-info">
                     <div><strong>Sheet ID:</strong> {{ key }}</div>
                     <div><strong>Range:</strong> {{ sheet.range_name }}</div>
                     <div><strong>Identifier:</strong> {{ sheet.identifier }}</div>
                 </div>
+                <!--Buttons to process sheet and view data-->
                 <div class="button-group">
                     <button class="btn-process" onclick="processSheet('{{ key }}')">
                         🔄 Process Sheet
@@ -390,6 +397,7 @@
             {% endfor %}
         </div>
 
+        <!--Displays database information-->
         <div id="data-display" style="display: none;">
             <div id="current-sheet-info" style="margin-bottom: 16px;">
                 <h2 style="color:#2c3e50;">
@@ -397,6 +405,7 @@
                 </h2>
             </div>
 
+            <!--The tabs for the user to view the different data processes-->
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('original')">📄 Original Data</button>
                 <button class="tab" onclick="switchTab('included')">✅ Included Data</button>
@@ -408,11 +417,12 @@
                 <button class="tab" onclick="switchTab('comparison')">Comparison (Jan and Apr)</button>
             </div>
 
-            <!-- Original Data Section -->
+            <!-- Original Data Section- shows all the rows from the database table-->
             <div id="original-section" class="table-section show">
                 <div class="table-header">
                     <h2>Original Data</h2>
                     <div class="table-controls">
+                        <!--pagination with different options of viewing-->
                         <select id="original-per-page" onchange="changePerPage('original')">
                             <option value="50">50 per page</option>
                             <option value="100" selected>100 per page</option>
@@ -421,7 +431,7 @@
                         </select>
                     </div>
                 </div>
-                <!-- REPLACE THIS ENTIRE filter-row div -->
+                <!-- filters for the original table -->
                 <div class="filter-row">
                     <input type="text" id="original-filter-name" placeholder="Filter by name...">
                     <select id="original-filter-month" onchange="applyFilters('original')">
@@ -452,13 +462,14 @@
                     </div>
                 </div>
                 <div class="pagination" id="original-pagination"></div>
-            </div>
+            </div> <!-- end of original section -->
 
             <!-- Included Data Section -->
             <div id="included-section" class="table-section">
                 <div class="table-header">
                     <h2>Included Data (Valid Records)</h2>
                     <div class="export-buttons" style="display: flex; gap: 10px;">
+                        <!-- download buttons for csv and pdf -->
                         <button onclick="downloadTable('included', 'csv')" style="background-color: #27ae60; min-width: auto; padding: 8px 16px;">
                             📥 Download CSV
                         </button>
@@ -466,7 +477,7 @@
                             📄 Download PDF
                         </button>
                     </div>
-
+                    <!-- filters for the included table -->
                     <div class="filter-row">
                         <input type="text" id="included-filter-name" placeholder="Filter by name...">
                         <select id="included-filter-month" onchange="applyFilters('included')">
@@ -506,7 +517,7 @@
                     </div>
                 </div>
                 <div class="pagination" id="included-pagination"></div>
-            </div>
+            </div><!-- end of included section -->
 
             <!-- Excluded Data Section -->
             <div id="excluded-section" class="table-section">
@@ -520,7 +531,6 @@
                             📄 Download PDF
                         </button>
                     </div>
-
                     <div class="filter-row">
                         <input type="text" id="excluded-filter-name" placeholder="Filter by name...">
                         <select id="excluded-filter-month" onchange="applyFilters('excluded')">
@@ -560,7 +570,7 @@
                     </div>
                 </div>
                 <div class="pagination" id="excluded-pagination"></div>
-            </div>
+            </div> <!-- end of excluded section -->
 
             <!-- Summary Statistics Section -->
             <div id="summary_stats-section" class="table-section">
@@ -576,7 +586,7 @@
                         <p>Click "Load Analytics" to generate statistics...</p>
                     </div>
                 </div>
-            </div>
+            </div> <!-- end of summary section -->
 
             <!-- Duplicates Analysis Section -->
             <div id="duplicates-section" class="table-section">
@@ -602,7 +612,7 @@
                     </div>
                     <div class="pagination" id="duplicates-pagination"></div>
                 </div>
-            </div>
+            </div><!-- end of duplicates section -->
 
             <!-- Charts Section -->
             <div id="charts-section" class="table-section">
@@ -621,7 +631,7 @@
                         <canvas id="analytics-chart" style="max-height: 400px;"></canvas>
                     </div>
                 </div>
-            </div>
+            </div><!-- end of charts section-->
 
 
             <!-- Common Names Section -->
@@ -637,7 +647,7 @@
                         <p style="color: #7f8c8d;">Load analytics first to see the most common names</p>
                     </div>
                 </div>
-            </div>
+            </div><!-- end of common names section -->
 
             <!-- Comparison Section -->
             <div id="comparison-section" class="table-section">
@@ -652,9 +662,8 @@
                         <p style="color: #7f8c8d;">Load comparison analytics to see JAN vs APR analysis</p>
                     </div>
                 </div>
-            </div>
-
+            </div> <!-- end of comparison section -->
         </div>
-    <script src="/static/main.js"></script>
+    <script src="/static/main.js"></script> 
 </body>
 </html>

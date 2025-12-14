@@ -594,6 +594,7 @@ class DataAnalytics:
         
         logger.info(f"Creating indexes on {original_table}...")
         
+        #create indexes for rows with status=included
         indexes = [
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_name_year ON {original_table}(firstname, birthyear) WHERE status = 'included'",
             f"CREATE INDEX IF NOT EXISTS idx_{original_table}_name_month ON {original_table}(firstname, birthmonth) WHERE status = 'included'",

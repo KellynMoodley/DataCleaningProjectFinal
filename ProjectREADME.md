@@ -36,7 +36,7 @@ DB_NAME=postgres
 
 ### **1. Data Processing Pipeline**
 
-```mermaid
+```
 Google Sheets → Fetch Data → Generate UUIDs → Validate & Clean → Store in PostgreSQL → Generate Analytics
 ```
 

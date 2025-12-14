@@ -1,8 +1,3 @@
-"""
-Flask Application for Data Cleaning Dashboard
-Main application file with all routes and endpoints.
-"""
-
 from flask import Flask, render_template, request, jsonify
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -10,15 +5,20 @@ import time
 import uuid
 import logging
 
+# Import custom modules for data handling and analytics
 from src import DataCleaner, SupabaseManager, ReportGenerator, DataAnalytics, MostCommonNamesExporter, ComparisonAnalytics, DB_CONFIG
 
-# Google Sheets setup
+# -----------------------------
+# Google Sheets API Setup
+# -----------------------------
 SERVICE_ACCOUNT_FILE = "service_account.json"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
+# Authenticate and build Sheets API service
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 service = build("sheets", "v4", credentials=creds)
 
+# Logging Setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ SHEETS_CONFIG = {
     }
 }
 
-
+# Helper Functions
 def init_supabase():
     """Initialize Supabase manager"""
     global supabase_manager
@@ -81,19 +81,16 @@ def get_sheet_data(spreadsheet_id, range_name):
 
 def process_and_clean_sheet_data(sheet_key, batch_size=100000):
     """
-    Process Google Sheets data directly with row_id generation and cleaning
+    Process Google Sheets data:
     
-    Args:
-        sheet_key: Sheet configuration key
-        batch_size: Number of rows to process per batch
-        store_original: Whether to store original data
-    
-    Returns:
-        Tuple of (total_original, total_included, total_excluded)
+    - Fetch rows
+    - Generate row IDs
+    - Clean data using DataCleaner
+    - Insert into Supabase in batches
     """
     config = SHEETS_CONFIG[sheet_key]
     
-    # Step 1: Fetch ALL data from Google Sheets
+    # Fetch ALL data from Google Sheets
     logger.info(f"Fetching data from Google Sheets: {config['display_name']}...")
     fetch_start = time.time()
     raw_data = get_sheet_data(config['spreadsheet_id'], config['range_name'])
@@ -106,16 +103,16 @@ def process_and_clean_sheet_data(sheet_key, batch_size=100000):
     total_rows = len(raw_data) - 1
     logger.info(f"✓ Fetched {total_rows:,} rows from Google Sheets in {fetch_time:.1f}s")
     
-    # Step 2: Create tables
+    # Create tables
     init_supabase()
     supabase_manager.create_original_table('clients_2025', config['identifier'])
     
-    # Step 3: Clear existing data
+    # Clear existing data
     safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
     original_table = f"{safe_table_name}_{config['identifier']}_original"
     supabase_manager.clear_table(original_table)
     
-    # Step 4: Process in batches
+    #Process in batches
     total_included = 0
     total_excluded = 0
     num_batches = (total_rows + batch_size - 1) // batch_size
@@ -133,7 +130,7 @@ def process_and_clean_sheet_data(sheet_key, batch_size=100000):
         # Parse batch with row_id generation
         batch_with_ids = []
 
-        
+        # Add row IDs and map columns
         for idx in range(batch_start, batch_end):
             row_data = raw_data[idx]
             row_id = str(uuid.uuid4())
@@ -161,9 +158,8 @@ def process_and_clean_sheet_data(sheet_key, batch_size=100000):
         excluded_count = sum(1 for row in all_data if row['status'] == 'excluded')
         logger.info(f"Batch {batch_num + 1}: Cleaned in {clean_time:.1f}s - {included_count} included, {excluded_count} excluded")
         
-        # Parallel inserts
+        # Insert into Supabase
         insert_start = time.time()
-        
         supabase_manager.append_data(original_table, all_data)
         insert_time = time.time() - insert_start
         
@@ -188,13 +184,15 @@ def process_and_clean_sheet_data(sheet_key, batch_size=100000):
     
     return total_rows, total_included, total_excluded
 
-
+# -----------------------------
+# Flask Routes - Main Page
+# -----------------------------
 @app.route('/')
 def index():
     """Serve main page"""
     return render_template('index.html', sheets=SHEETS_CONFIG)
 
-
+# Flask Routes - Sheet Processing
 @app.route("/process/<sheet_key>", methods=['POST'])
 def process(sheet_key):
     """Process a sheet and clean the data"""
@@ -215,7 +213,7 @@ def process(sheet_key):
         logger.error(f"Error processing sheet {sheet_key}: {e}")
         return jsonify({"error": str(e)}), 500
 
-
+# Flask Routes - Get Table Data
 @app.route("/data/<sheet_key>/<table_type>")
 def get_table_data(sheet_key, table_type):
     """Get data from a specific table"""
@@ -259,7 +257,7 @@ def get_table_data(sheet_key, table_type):
             sort_by, 
             sort_order, 
             table_type if table_type in ['included', 'excluded'] else None,
-            filters  # ← ADD THIS!
+            filters 
         )
         
         return jsonify({
@@ -273,7 +271,8 @@ def get_table_data(sheet_key, table_type):
     except Exception as e:
         logger.error(f"Error getting table data: {e}")
         return jsonify({"error": str(e)}), 500
-    
+
+# Flask Routes - Check Tables    
 @app.route("/check_tables/<sheet_key>")
 def check_tables(sheet_key):
     """Check if tables exist for a sheet"""
@@ -309,9 +308,17 @@ def check_tables(sheet_key):
     except Exception as e:
         logger.error(f"Error checking tables for {sheet_key}: {e}")
         return jsonify({"error": str(e)}), 500
-    
+   
+# Flask Routes - Download Table
 @app.route("/download/<sheet_key>/<table_type>/<format>")
 def download_table(sheet_key, table_type, format):
+    
+    """
+    Endpoint to download a table from Supabase as CSV or PDF.
+    - sheet_key: key of the sheet in SHEETS_CONFIG
+    - table_type: 'included', 'excluded', or 'original'
+    - format: 'csv' or 'pdf'
+    """
     sheet = SHEETS_CONFIG.get(sheet_key)
     if not sheet:
         return jsonify({"error": "Invalid sheet key"}), 400
@@ -328,6 +335,7 @@ def download_table(sheet_key, table_type, format):
         safe_table_name = 'clients_2025'.lower().replace(' ', '_').replace('-', '_')
         original_table = f"{safe_table_name}_{sheet['identifier']}_original"
 
+        # Build SQL query depending on table_type
         if table_type == 'included':
             columns_select = "original_row_number, row_id, firstname, birthday, birthmonth, birthyear"
             where_clause = "WHERE status = 'included'"
@@ -338,6 +346,7 @@ def download_table(sheet_key, table_type, format):
             columns_select = "*"
             where_clause = ""
 
+        # Compose full SQL query
         sql = f"""
             SELECT {columns_select}
             FROM {original_table}
@@ -345,11 +354,12 @@ def download_table(sheet_key, table_type, format):
             ORDER BY original_row_number ASC
         """
 
-        # Fetch column names ONLY (cheap)
+        # Fetch column names for report generation
         with supabase_manager.conn.cursor() as cur:
             cur.execute(sql + " LIMIT 0")
             columns = [desc[0] for desc in cur.description]
 
+        # Generate CSV or PDF based on requested format
         if format == "csv":
             return report_generator.generate_csv(
                 sheet=sheet,
@@ -372,7 +382,6 @@ def download_table(sheet_key, table_type, format):
         return jsonify({"error": str(e)}), 500
 
     
-    
 #Analytics section 
 @app.route('/analytics/<sheet_key>/create', methods=['POST'])
 def create_analytics(sheet_key):
@@ -394,9 +403,9 @@ def create_analytics(sheet_key):
             # Create analytics tables
             analytics.create_analytics_table('clients_2025', sheet['identifier'])
             analytics.create_duplicate_groups_view('clients_2025', sheet['identifier'])
-            analytics.create_duplicate_table_indexes('clients_2025', sheet['identifier'])  # ← Indexes on DUPLICATE tables AFTER they're created
+            analytics.create_duplicate_table_indexes('clients_2025', sheet['identifier']) 
             analytics.create_visualization_tables('clients_2025', sheet['identifier'])
-            analytics.create_common_names_table('clients_2025', sheet['identifier'])  # Add this line
+            analytics.create_common_names_table('clients_2025', sheet['identifier'])  
             
             logger.info(f"✅ Analytics created successfully for {sheet_key}")
             return jsonify({'success': True, 'message': 'Analytics created successfully'})
@@ -575,36 +584,45 @@ def get_common_names(sheet_key):
 def download_common_names(sheet_key, format):
     """Download common names as CSV or JSON"""
     try:
+        # Retrieve the sheet configuration from SHEETS_CONFIG
         sheet = SHEETS_CONFIG.get(sheet_key)
         if not sheet:
             return jsonify({'error': 'Invalid sheet key'}), 404
         
+        # Validate requested format
         if format not in ['csv', 'json']:
             return jsonify({'error': 'Invalid format. Use csv or json'}), 400
         
         logger.info(f"Downloading common names as {format} for sheet: {sheet_key}")
         
+        # Initialize analytics object and connect to the database
         analytics = DataAnalytics(DB_CONFIG)
         analytics.connect()
         
         try:
+            # Fetch common names data for the given sheet
             data = analytics.get_common_names_data('clients_2025', sheet['identifier'])
             
             if not data:
                 return jsonify({'error': 'No common names data found'}), 404
             
+            # Initialize the exporter utility
             exporter = MostCommonNamesExporter()
             
+            # Generate CSV or JSON based on requested format
             if format == 'csv':
                 return exporter.generate_csv(data, sheet)
             else:
                 return exporter.generate_json(data, sheet)
             
+        # Ensure the database connection is closed even if an error occurs    
         finally:
             analytics.disconnect()
             
     except Exception as e:
+        # Log the exception with error message
         logger.error(f"Error downloading common names: {str(e)}")
+        # Return error response as JSON
         return jsonify({'error': str(e)}), 500
     
 @app.route('/comparison/create', methods=['POST'])
@@ -789,6 +807,7 @@ def download_comparison(dataset, format):
         
         logger.info(f"Downloading {dataset} as {format}")
         
+        # Initialize comparison analytics object and connect to DB
         comparison = ComparisonAnalytics(DB_CONFIG)
         comparison.connect()
         
@@ -800,6 +819,7 @@ def download_comparison(dataset, format):
             # Create temporary file
             temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', newline='')
             
+            # Export data depending on the dataset type
             if dataset == 'common_names':
                 filter_top80 = request.args.get('filter_top80', None)
                 comparison.export_common_names_to_csv('clients_2025', temp_file.name, filter_top80)
@@ -808,7 +828,7 @@ def download_comparison(dataset, format):
                 top80_only = request.args.get('top80_only', 'false').lower() == 'true'
                 comparison.export_unique_jan_to_csv('clients_2025', temp_file.name, top80_only)
                 filename = 'unique_jan.csv'
-            else:  # unique_apr
+            else:  
                 top80_only = request.args.get('top80_only', 'false').lower() == 'true'
                 comparison.export_unique_apr_to_csv('clients_2025', temp_file.name, top80_only)
                 filename = 'unique_apr.csv'
@@ -839,6 +859,7 @@ def check_comparison_tables():
         comparison_summary_table = f"{safe_table_name}_comparison_summary"
         
         with supabase_manager.conn.cursor() as cur:
+            # Check if the table exists in the database using information_schema
             cur.execute("""
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
@@ -846,7 +867,8 @@ def check_comparison_tables():
                 )
             """, (comparison_summary_table,))
             exists = cur.fetchone()[0]
-        
+            
+        # Fetch the boolean result (True if table exists, False otherwise)
         return jsonify({
             'success': True,
             'exists': exists

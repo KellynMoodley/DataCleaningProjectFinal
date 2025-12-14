@@ -445,7 +445,14 @@ class ComparisonAnalytics:
         # Drop existing table
         self.execute_sql(f"DROP TABLE IF EXISTS {summary_table}")
         
-        # Create comprehensive summary table
+    
+        """ Create comprehensive summary table
+        Includes:
+          - JAN/APR total records and unique names
+          - Top 80% frequent names
+          - Unique names in each month
+          - Overlaps between months and top 80%"""
+          
         create_query = f"""
         CREATE TABLE {summary_table} AS
         WITH jan_included AS (
