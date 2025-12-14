@@ -29,7 +29,7 @@ DB_NAME=postgres
 2. Enable Google Sheets API
 3. Create Service Account credentials
 4. Download JSON key as `service_account.json`
-5. Share your Google Sheets with the service account email
+5. Share the Google Sheets with the service account email
 
 
 ## 📋 Features
@@ -71,7 +71,7 @@ Google Sheets → Fetch Data → Generate UUIDs → Validate & Clean → Store i
 | **Summary Statistics** | Aggregate metrics and uniqueness analysis |
 | **Duplicate Analysis** | 6 types of duplicate detection |
 | **Charts** | Birth year/month distribution visualizations |
-| **Common Names** | Top 80% most frequent names (Pareto analysis) |
+| **Common Names** | Top 80% most frequent names |
 | **Comparison (JAN vs APR)** | Dataset overlap and unique names |
 
 #### **Interactive Features**
@@ -97,19 +97,17 @@ Google Sheets → Fetch Data → Generate UUIDs → Validate & Clean → Store i
 
 ### **Duplicate Detection (6 Types)**
 
-| Type | Fields Analyzed | Use Case |
-|------|----------------|----------|
-| **Name + Year** | `firstname`, `birthyear` | Same person, different months |
-| **Name + Month** | `firstname`, `birthmonth` | Same name, same birth month |
-| **Name + Day** | `firstname`, `birthday` | Same name, same day of month |
-| **Year + Month** | `birthyear`, `birthmonth` | Cohort analysis |
-| **Year + Day** | `birthyear`, `birthday` | Date pattern analysis |
-| **Month + Day** | `birthmonth`, `birthday` | Seasonal pattern analysis |
+| Type | Fields Analyzed | 
+|------|----------------|
+| **Name + Year** | `firstname`, `birthyear` | 
+| **Name + Month** | `firstname`, `birthmonth` | 
+| **Name + Day** | `firstname`, `birthday` | 
+| **Year + Month** | `birthyear`, `birthmonth` |
+| **Year + Day** | `birthyear`, `birthday` |
+| **Month + Day** | `birthmonth`, `birthday`| 
 
 ### **Top 80% Most Common Names**
 
-Implements Pareto Principle (80/20 rule):
-- Identifies smallest set of names covering 80% of records
 - Provides cumulative frequency analysis
 - Exports as CSV/JSON
 
@@ -393,12 +391,10 @@ export_*_to_csv()               # CSV exports
 
 ### **Security Measures**
 - ✅ Environment variables for sensitive credentials
-- ✅ SQL injection prevention (parameterized queries)
-- ✅ XSS protection (HTML escaping)
 - ✅ Service account authentication for Google Sheets
 
 ### **Performance Optimizations**
-- ✅ PostgreSQL COPY command for bulk inserts (10x faster than INSERT)
+- ✅ PostgreSQL COPY command for bulk inserts (faster than INSERT)
 - ✅ Batch processing (100,000 rows per batch)
 - ✅ Comprehensive indexing on all query fields
 - ✅ Connection pooling with autocommit
@@ -408,8 +404,6 @@ export_*_to_csv()               # CSV exports
 
 ### **Scalability Features**
 - ✅ Handles 1M+ row datasets
-- ✅ Concurrent request handling
-- ✅ Temp table cleanup in comparison analytics
 - ✅ Statement timeout management (10 min for large operations)
 
 ---
@@ -419,7 +413,7 @@ export_*_to_csv()               # CSV exports
 ### **Standard Workflow**
 
 ```
-1. Load Dashboard → http://localhost:5000
+1. Load Dashboard
 
 2. Process Sheet
    └─> Click "Process Sheet" on desired sheet card
@@ -459,16 +453,15 @@ export_*_to_csv()               # CSV exports
 | Issue | Solution |
 |-------|----------|
 | **Database connection fails** | Check `.env` credentials, verify PostgreSQL is running |
-| **Google Sheets API error** | Verify `service_account.json` exists, check sheet sharing permissions |
+| **Google Sheets API error** | Verify `service_account.json` exists in folder |
 | **"No data available"** | Process sheet first before viewing data |
-| **Analytics button greyed out** | Tables already created; refresh to reload |
 | **Comparison fails** | Ensure both JAN and APR sheets are processed and analytics loaded |
 | **PDF download empty** | Check console for errors, verify ReportLab installation |
-| **Slow performance** | Create indexes (`create_duplicate_indexes()`), reduce batch size |
+| **Slow performance** | It takes a while to load/view data on dashboard or download csv amd pdfs because of the large datasets |
 
 ### **Debug Mode**
 
-Enable detailed logging in `app.py`:
+Enabled detailed logging in `app.py`:
 ```python
 logging.basicConfig(level=logging.DEBUG)
 ```
