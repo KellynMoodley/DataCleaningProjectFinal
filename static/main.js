@@ -89,26 +89,41 @@ function processSheet(sheetKey) {
     });
 }
 
-// View sheet data
 function viewSheetData(sheetKey) {
     currentSheet = sheetKey;
-    
+
     // Show data display section
-    document.getElementById('data-display').style.display = 'block';
-    
+    const dataDisplay = document.getElementById('data-display');
+    dataDisplay.style.display = 'block';
+
+    // Update currently viewed sheet label
+    const sheetNameElement = document.getElementById('current-sheet-name');
+
+    // Try to read display name from DOM (fallback to key)
+    const sheetCard = document.querySelector(
+        `.sheet-card button[onclick="viewSheetData('${sheetKey}')"]`
+    )?.closest('.sheet-card');
+
+    const displayName = sheetCard
+        ? sheetCard.querySelector('h3').innerText
+        : sheetKey;
+
+    sheetNameElement.textContent = `${displayName} (${sheetKey})`;
+
     // Scroll to data display
-    document.getElementById('data-display').scrollIntoView({ behavior: 'smooth' });
-    
+    dataDisplay.scrollIntoView({ behavior: 'smooth' });
+
     // Reset table states
     currentTableStates = {
         original: { page: 1, perPage: 100, sortBy: 'original_row_number', sortOrder: 'asc' },
         included: { page: 1, perPage: 100, sortBy: 'original_row_number', sortOrder: 'asc' },
         excluded: { page: 1, perPage: 100, sortBy: 'original_row_number', sortOrder: 'asc' }
     };
-    
-    // Load data for all tables
+
+    // Load data for default tab
     switchTab('original');
 }
+
 
 // Switch between tabs
 function switchTab(tableType) {

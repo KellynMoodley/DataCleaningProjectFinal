@@ -50,10 +50,10 @@ class ReportGenerator:
         doc = SimpleDocTemplate(
             buffer,
             pagesize=landscape(A4),
-            leftMargin=5*mm,
-            rightMargin=5*mm,
-            topMargin=5*mm,
-            bottomMargin=5*mm
+            leftMargin=5 * mm,
+            rightMargin=5 * mm,
+            topMargin=5 * mm,
+            bottomMargin=5 * mm
         )
 
         elements = []
@@ -68,30 +68,44 @@ class ReportGenerator:
 
         title = f"{title_map.get(table_type, 'DATA REPORT')} - {sheet['display_name']}"
         elements.append(Paragraph(f"<b>{title}</b>", styles['Title']))
-        elements.append(Spacer(1, 5*mm))
-        elements.append(Paragraph(
-            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            styles['Normal']
-        ))
-        elements.append(Spacer(1, 5*mm))
+        elements.append(Spacer(1, 5 * mm))
+        elements.append(
+            Paragraph(
+                f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                styles['Normal']
+            )
+        )
+        elements.append(Spacer(1, 5 * mm))
 
-        # Column filtering
+        # Columns to exclude entirely
         exclude_columns = {'id', 'created_at'}
         filtered_columns = [c for c in columns if c not in exclude_columns]
         column_indices = [columns.index(c) for c in filtered_columns]
 
-        # Header row - use simple strings instead of Paragraph objects
+        # Columns that need wrapping
+        wrap_columns = {'row_id', 'exclusion_reason'}
+
+        # Header row
         header_row = [
             col[:20] + '...' if len(col) > 20 else col
             for col in filtered_columns
         ]
 
         # Column widths
-        available_width = 280*mm - 10*mm
-        col_width = max(25*mm, available_width / len(filtered_columns))
+        available_width = 280 * mm - 10 * mm
+        col_width = max(25 * mm, available_width / len(filtered_columns))
         col_widths = [col_width] * len(filtered_columns)
 
-        # Simplified table style
+        # Paragraph style for wrapped cells
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            fontName='Helvetica',
+            fontSize=8,
+            leading=10,
+            wordWrap='CJK'  # allows breaking long strings without spaces
+        )
+
+        # Table style
         table_style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#404040')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -105,27 +119,32 @@ class ReportGenerator:
             ('TOPPADDING', (0, 0), (-1, -1), 3),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1),
-             [colors.white, colors.HexColor('#F5F5F5')]),
+            [colors.white, colors.HexColor('#F5F5F5')]),
         ])
 
         max_rows = 1000
-        
-        # Fetch all data at once (faster than cursor iteration for limited rows)
+
+        # Fetch data
         with conn.cursor() as cur:
             cur.execute(sql)
             all_rows = cur.fetchmany(max_rows)
 
-        # Build table data - use plain strings instead of Paragraph objects
+        # Build table data
         table_data = [header_row]
-        
+
         for row in all_rows:
-            formatted_row = [
-                '' if row[i] is None else str(row[i])[:150]
-                for i in column_indices
-            ]
+            formatted_row = []
+            for col, idx in zip(filtered_columns, column_indices):
+                value = '' if row[idx] is None else str(row[idx])[:150]
+
+                if col in wrap_columns:
+                    formatted_row.append(Paragraph(value, cell_style))
+                else:
+                    formatted_row.append(value)
+
             table_data.append(formatted_row)
 
-        # Create single table (faster than multiple tables)
+        # Create table
         if table_data:
             table = Table(table_data, colWidths=col_widths, repeatRows=1)
             table.setStyle(table_style)
@@ -134,7 +153,11 @@ class ReportGenerator:
         doc.build(elements)
         buffer.seek(0)
 
-        filename = f"{sheet['display_name']}_{table_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        filename = (
+            f"{sheet['display_name']}_"
+            f"{table_type}_"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        )
 
         return send_file(
             buffer,
