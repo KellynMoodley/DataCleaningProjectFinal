@@ -36,7 +36,7 @@ This document maps the **assessment requirements** to their **actual implementat
 | Column filtering (name, month, year) | ✅ Complete | `main.js` – `applyFilters()`         |
 | Column sorting                       | ✅ Complete | `sortTable()`                        |
 | CSV download                         | ✅ Complete | `/download/<sheet>/<type>/csv`       |
-| PDF download                         | ✅ Complete | `/download/<sheet>/<type>/pdf`       |
+| PDF download                         | ✅ Complete | `/download/<sheet>/<type>/pdf`-only displays first 1000 rows due to size of pdf |
 
 ---
 
@@ -45,8 +45,8 @@ This document maps the **assessment requirements** to their **actual implementat
 | Requirement                  | Status     | Implementation            |
 | ---------------------------- | ---------- | ------------------------- |
 | Table with exclusion reasons | ✅ Complete | Excluded Data section     |
-| CSV download                 | ✅ Complete | Shared download endpoints |
-| PDF download                 | ✅ Complete | Shared download endpoints |
+| CSV download                 | ✅ Complete | `/download/<sheet>/<type>/csv`|
+| PDF download                 | ✅ Complete | `/download/<sheet>/<type>/pdf`- only displays first 1000 rows due to size of pdf  |
 
 ---
 
