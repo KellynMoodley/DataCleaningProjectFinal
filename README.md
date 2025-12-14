@@ -164,4 +164,4 @@ Additional Tools-
 •	ReportLab (PDF generation)
 •	dotenv (environment variables)
 •	Jinja2 (templating)
-•	Supabase
+•	Supabase (Database)
