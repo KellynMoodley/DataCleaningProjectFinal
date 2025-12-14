@@ -121,6 +121,15 @@ DataCleaningProjectFinal/
 ├── requirements.txt            # Python dependencies
 ├── service_account.json        # Google Sheets API credentials
 ├── .env                        # Environment variables (DB credentials)
+├── README.md
+├── Extra README
+│   ├── Assessment_checklistREADME.md
+│   ├── ProcessREADME.md
+│   └── ProjectREADME.md
+├── images                     # images for ProcessREADME
+│   ├── image3.png
+│   ├── images1.png
+│   └── images2.png
 ├── templates/
 │   └── index.html             # Main dashboard template
 ├── static/
