@@ -296,8 +296,8 @@ class SupabaseManager:
                 table_exists = cur.fetchone()[0]
                 logger.info(f"🔍 Table exists query returned: {table_exists}")
                 
-                if table_exists > 0:  # ✅ CORRECT - use the variable
-                    result['exists'] = True  # ADD THIS LINE TOO!
+                if table_exists > 0: 
+                    result['exists'] = True  # 
                     
                     cur.execute(f"SELECT COUNT(*) FROM {original_table}")
                     result['counts']['original'] = cur.fetchone()[0]
